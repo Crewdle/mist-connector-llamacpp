@@ -1,0 +1,33 @@
+{
+  "name": "@crewdle/mist-connector-llamacpp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Crewdle/mist-connector-llamacpp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Crewdle/mist-connector-llamacpp/issues"
+  },
+  "homepage": "https://github.com/Crewdle/mist-connector-llamacpp#readme",
+  "files": [
+    "dist/"
+  ],
+  "dependencies": {
+    "node-llama-cpp": "^3.0.0-beta.22"
+  },
+  "devDependencies": {
+    "@crewdle/web-sdk-types": "git@github.com:Crewdle/web-sdk-types.git#46b8df6fe10b5b7e89cfb8aadaf729621d3d9753",
+    "@types/async-retry": "^1.4.8",
+    "@types/node": "^20.12.12",
+    "typescript": "^5.4.5"
+  }
+}
