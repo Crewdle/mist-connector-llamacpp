@@ -25,7 +25,7 @@
     "node-llama-cpp": "^3.0.0-beta.22"
   },
   "devDependencies": {
-    "@crewdle/web-sdk-types": "git@github.com:Crewdle/web-sdk-types.git#46b8df6fe10b5b7e89cfb8aadaf729621d3d9753",
+    "@crewdle/web-sdk-types": "git@github.com:Crewdle/web-sdk-types.git#b8dfc8a9dfe20a7a4a58d5db315db135d822a5e1",
     "@types/async-retry": "^1.4.8",
     "@types/node": "^20.12.12",
     "typescript": "^5.4.5"

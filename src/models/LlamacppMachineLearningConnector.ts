@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import { Llama, getLlama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import { IMachineLearningConnector, IVectorDatabaseConnector, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import { IJob, IJobResult, IMachineLearningConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
 /**
  * The Llamacpp machine learning connector.
@@ -115,11 +115,16 @@ export class LlamacppMachineLearningConnector implements IMachineLearningConnect
    * @param prompt The prompt to use.
    * @returns An async generator that yields the responses.
    */
-  async *prompt(prompt: string): AsyncGenerator<string> {
+  async *processJob(job: IJob): AsyncGenerator<IJobResult> {
     if (!this.llmModel) {
       throw new Error('Model not initialized');
     }
 
+    if (job.parameters.jobType !== JobType.AI) {
+      return;
+    }
+
+    const prompt = job.parameters.prompt;
     const context = await this.getContext(prompt);
 
     if (!this.chatContext) {
@@ -145,7 +150,14 @@ export class LlamacppMachineLearningConnector implements IMachineLearningConnect
     while (true) {
       const token = await new Promise<Token[]>((resolve) => tokenEmitter.once('token', resolve));
       if (!token) break;
-      yield this.llmModel.detokenize(token);
+      yield {
+        id: job.id,
+        status: JobStatus.Processing,
+        result: {
+          jobType: JobType.AI,
+          output: this.llmModel.detokenize(token),
+        },
+      };
     }
   }
 
