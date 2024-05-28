@@ -1,5 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LlamacppMachineLearningConnector = void 0;
-var LlamacppMachineLearningConnector_1 = require("./models/LlamacppMachineLearningConnector");
-Object.defineProperty(exports, "LlamacppMachineLearningConnector", { enumerable: true, get: function () { return LlamacppMachineLearningConnector_1.LlamacppMachineLearningConnector; } });
+exports.LlamacppGenerativeAIWorkerConnector = void 0;
+var LlamacppGenerativeAIWorkerConnector_1 = require("./models/LlamacppGenerativeAIWorkerConnector");
+Object.defineProperty(exports, "LlamacppGenerativeAIWorkerConnector", { enumerable: true, get: function () { return LlamacppGenerativeAIWorkerConnector_1.LlamacppGenerativeAIWorkerConnector; } });

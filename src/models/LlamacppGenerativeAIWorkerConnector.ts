@@ -8,7 +8,7 @@ import { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnecto
  * The Llamacpp machine learning connector.
  * @category Connector
  */
-export class LlamacppMachineLearningConnector implements IGenerativeAIWorkerConnector {
+export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerConnector {
   /**
    * The vector database connector.
    * @ignore

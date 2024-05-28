@@ -1,1 +1,1 @@
-export { LlamacppMachineLearningConnector } from './models/LlamacppMachineLearningConnector';
+export { LlamacppGenerativeAIWorkerConnector } from './models/LlamacppGenerativeAIWorkerConnector';
