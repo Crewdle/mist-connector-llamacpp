@@ -47,7 +47,6 @@ var __asyncGenerator = (this && this.__asyncGenerator) || function (thisArg, _ar
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LlamacppGenerativeAIWorkerConnector = void 0;
 const events_1 = require("events");
-const web_sdk_types_1 = require("@crewdle/web-sdk-types");
 /**
  * The Llamacpp machine learning connector.
  * @category Connector
@@ -116,7 +115,7 @@ class LlamacppGenerativeAIWorkerConnector {
             if (!this.llmModel) {
                 throw new Error('Model not initialized');
             }
-            if (job.parameters.jobType !== web_sdk_types_1.JobType.AI) {
+            if (job.parameters.jobType !== 0) {
                 return yield __await(void 0);
             }
             const { LlamaChatSession } = yield __await(Promise.resolve().then(() => __importStar(require('node-llama-cpp'))));
@@ -144,9 +143,9 @@ class LlamacppGenerativeAIWorkerConnector {
                     break;
                 yield yield __await({
                     id: job.id,
-                    status: web_sdk_types_1.JobStatus.Processing,
+                    status: 'Completed',
                     result: {
-                        jobType: web_sdk_types_1.JobType.AI,
+                        jobType: 0,
                         output: this.llmModel.detokenize(token),
                     },
                 });

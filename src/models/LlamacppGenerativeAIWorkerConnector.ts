@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
 /**
  * The Llamacpp machine learning connector.
@@ -121,7 +121,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       throw new Error('Model not initialized');
     }
 
-    if (job.parameters.jobType !== JobType.AI) {
+    if (job.parameters.jobType !== 0) {
       return;
     }
 
@@ -155,9 +155,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       if (!token) break;
       yield {
         id: job.id,
-        status: JobStatus.Processing,
+        status: 'Completed' as JobStatus,
         result: {
-          jobType: JobType.AI,
+          jobType: 0,
           output: this.llmModel.detokenize(token),
         },
       };

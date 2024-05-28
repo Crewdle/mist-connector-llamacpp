@@ -1,4 +1,4 @@
-import { IJob, IJobResult, IGenerativeAIWorkerConnector, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IJob, IJobResult, IGenerativeAIWorkerConnector, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 /**
  * The Llamacpp machine learning connector.
  * @category Connector
