@@ -2,13 +2,13 @@ import { EventEmitter } from 'events';
 
 import { Llama, getLlama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import { IJob, IJobResult, IMachineLearningConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
 /**
  * The Llamacpp machine learning connector.
  * @category Connector
  */
-export class LlamacppMachineLearningConnector implements IMachineLearningConnector {
+export class LlamacppMachineLearningConnector implements IGenerativeAIWorkerConnector {
   /**
    * The vector database connector.
    * @ignore
