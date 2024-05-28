@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-import { Llama, getLlama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
+import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
 import { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
@@ -79,6 +79,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param similarityModel The path to the similarity model.
    */
   async initialize(llmModel: string, similarityModel: string): Promise<void> {
+    const { getLlama } = await import('node-llama-cpp');
     this.engine = await getLlama();
     this.llmModel = await this.engine.loadModel({
       modelPath: llmModel,
@@ -123,6 +124,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (job.parameters.jobType !== JobType.AI) {
       return;
     }
+
+    const { LlamaChatSession } = await import('node-llama-cpp');
 
     const prompt = job.parameters.prompt;
     const context = await this.getContext(prompt);
