@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import type { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 
 /**
