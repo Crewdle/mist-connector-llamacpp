@@ -49,14 +49,14 @@ exports.LlamacppGenerativeAIWorkerConnector = void 0;
 const events_1 = require("events");
 /**
  * The Llamacpp machine learning connector.
- * @category Connector
  */
 class LlamacppGenerativeAIWorkerConnector {
     /**
      * The constructor.
-     * @param vectorDatabaseConstructor The vector database connector constructor.
+     * @param vectorDatabaseConnector The vector database connector constructor.
      */
-    constructor(vectorDatabaseConstructor) {
+    constructor(vectorDatabaseConnector, options) {
+        this.options = options;
         /**
          * The instructions.
          * @ignore
@@ -67,7 +67,7 @@ class LlamacppGenerativeAIWorkerConnector {
          * @ignore
          */
         this.sentences = [];
-        this.vectorDatabase = new vectorDatabaseConstructor();
+        this.vectorDatabase = new vectorDatabaseConnector();
     }
     /**
      * Initialize the machine learning model.
@@ -76,13 +76,14 @@ class LlamacppGenerativeAIWorkerConnector {
      */
     initialize(llmModel, similarityModel) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d;
             const { getLlama } = yield Promise.resolve().then(() => __importStar(require('node-llama-cpp')));
             this.engine = yield getLlama();
             this.llmModel = yield this.engine.loadModel({
-                modelPath: llmModel,
+                modelPath: (_b = (_a = this.options) === null || _a === void 0 ? void 0 : _a.llmPath) !== null && _b !== void 0 ? _b : llmModel,
             });
             this.similarityModel = yield this.engine.loadModel({
-                modelPath: similarityModel,
+                modelPath: (_d = (_c = this.options) === null || _c === void 0 ? void 0 : _c.similarityPath) !== null && _d !== void 0 ? _d : similarityModel,
             });
         });
     }

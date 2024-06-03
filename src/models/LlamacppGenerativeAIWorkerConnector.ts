@@ -3,10 +3,10 @@ import { EventEmitter } from 'events';
 import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
 import type { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, JobType, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 
 /**
  * The Llamacpp machine learning connector.
- * @category Connector
  */
 export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerConnector {
   /**
@@ -65,12 +65,13 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
   /**
    * The constructor.
-   * @param vectorDatabaseConstructor The vector database connector constructor.
+   * @param vectorDatabaseConnector The vector database connector constructor.
    */
   constructor(
-    vectorDatabaseConstructor: VectorDatabaseConnectorConstructor,
+    vectorDatabaseConnector: VectorDatabaseConnectorConstructor,
+    private options?: ILlamacppGenerativeAIWorkerOptions,
   ) {
-    this.vectorDatabase = new vectorDatabaseConstructor();
+    this.vectorDatabase = new vectorDatabaseConnector();
   }
 
   /**
@@ -82,10 +83,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     const { getLlama } = await import('node-llama-cpp');
     this.engine = await getLlama();
     this.llmModel = await this.engine.loadModel({
-      modelPath: llmModel,
+      modelPath: this.options?.llmPath ?? llmModel,
     });
     this.similarityModel = await this.engine.loadModel({
-      modelPath: similarityModel,
+      modelPath: this.options?.similarityPath ?? similarityModel,
     });
   }
 

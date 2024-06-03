@@ -1,9 +1,10 @@
 import type { IJob, IJobResult, IGenerativeAIWorkerConnector, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 /**
  * The Llamacpp machine learning connector.
- * @category Connector
  */
 export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerConnector {
+    private options?;
     /**
      * The vector database connector.
      * @ignore
@@ -51,9 +52,9 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
     private chatSession?;
     /**
      * The constructor.
-     * @param vectorDatabaseConstructor The vector database connector constructor.
+     * @param vectorDatabaseConnector The vector database connector constructor.
      */
-    constructor(vectorDatabaseConstructor: VectorDatabaseConnectorConstructor);
+    constructor(vectorDatabaseConnector: VectorDatabaseConnectorConstructor, options?: ILlamacppGenerativeAIWorkerOptions | undefined);
     /**
      * Initialize the machine learning model.
      * @param llmModel The path to the LLM model.
