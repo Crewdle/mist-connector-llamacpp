@@ -76,14 +76,20 @@ class LlamacppGenerativeAIWorkerConnector {
      */
     initialize(llmModel, similarityModel) {
         return __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c, _d;
+            var _a, _b, _c, _d, _e, _f;
+            if (!llmModel && !((_a = this.options) === null || _a === void 0 ? void 0 : _a.llmPath)) {
+                throw new Error('LLM model path not provided');
+            }
+            if (!similarityModel && !((_b = this.options) === null || _b === void 0 ? void 0 : _b.similarityPath)) {
+                throw new Error('Similarity model path not provided');
+            }
             const { getLlama } = yield Promise.resolve().then(() => __importStar(require('node-llama-cpp')));
             this.engine = yield getLlama();
             this.llmModel = yield this.engine.loadModel({
-                modelPath: (_b = (_a = this.options) === null || _a === void 0 ? void 0 : _a.llmPath) !== null && _b !== void 0 ? _b : llmModel,
+                modelPath: (_d = llmModel !== null && llmModel !== void 0 ? llmModel : (_c = this.options) === null || _c === void 0 ? void 0 : _c.llmPath) !== null && _d !== void 0 ? _d : 'llm.gguf',
             });
             this.similarityModel = yield this.engine.loadModel({
-                modelPath: (_d = (_c = this.options) === null || _c === void 0 ? void 0 : _c.similarityPath) !== null && _d !== void 0 ? _d : similarityModel,
+                modelPath: (_f = similarityModel !== null && similarityModel !== void 0 ? similarityModel : (_e = this.options) === null || _e === void 0 ? void 0 : _e.similarityPath) !== null && _f !== void 0 ? _f : 'similarity.gguf',
             });
         });
     }

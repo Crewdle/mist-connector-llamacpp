@@ -79,14 +79,20 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param llmModel The path to the LLM model.
    * @param similarityModel The path to the similarity model.
    */
-  async initialize(llmModel: string, similarityModel: string): Promise<void> {
+  async initialize(llmModel?: string, similarityModel?: string): Promise<void> {
+    if (!llmModel && !this.options?.llmPath) {
+      throw new Error('LLM model path not provided');
+    }
+    if (!similarityModel && !this.options?.similarityPath) {
+      throw new Error('Similarity model path not provided');
+    }
     const { getLlama } = await import('node-llama-cpp');
     this.engine = await getLlama();
     this.llmModel = await this.engine.loadModel({
-      modelPath: this.options?.llmPath ?? llmModel,
+      modelPath: llmModel ?? this.options?.llmPath ?? 'llm.gguf',
     });
     this.similarityModel = await this.engine.loadModel({
-      modelPath: this.options?.similarityPath ?? similarityModel,
+      modelPath: similarityModel ?? this.options?.similarityPath ?? 'similarity.gguf',
     });
   }
 
