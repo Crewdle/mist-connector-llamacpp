@@ -35,6 +35,11 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     sentences = [];
     /**
+     * The documents.
+     * @ignore
+     */
+    documents = [];
+    /**
      * The embedding context.
      * @ignore
      */
@@ -80,20 +85,38 @@ export class LlamacppGenerativeAIWorkerConnector {
     }
     /**
      * Add content to the machine learning model.
+     * @param name The name of the content.
      * @param content The content to add.
      * @returns A promise that resolves when the content has been added.
      */
-    async addContent(content) {
+    async addContent(name, content) {
         if (!this.similarityModel) {
             throw new Error('Model not initialized');
         }
         this.embeddingContext = await this.similarityModel.createEmbeddingContext();
         const sentences = this.splitIntoSentences(content);
+        this.documents.push({
+            name,
+            startIndex: this.sentences.length,
+            length: sentences.length,
+        });
         this.sentences.push(...sentences);
         const embeddings = await Promise.all(sentences.map(sentence => this.getVector(sentence)));
         this.vectorDatabase.insert(embeddings);
         await this.embeddingContext.dispose();
         this.embeddingContext = undefined;
+    }
+    /**
+     * Remove content from the machine learning model.
+     * @param name The name of the content.
+     */
+    removeContent(name) {
+        const document = this.documents.find(document => document.name === name);
+        if (!document)
+            return;
+        this.vectorDatabase.remove(Array.from({ length: document.length }, (_, i) => document.startIndex + i));
+        this.sentences.splice(document.startIndex, document.length);
+        this.documents = this.documents.filter(doc => doc !== document);
     }
     /**
      * Prompt the machine learning model.

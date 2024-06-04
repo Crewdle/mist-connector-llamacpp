@@ -4,6 +4,7 @@ import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaC
 
 import type { IJob, IJobResult, IGenerativeAIWorkerConnector, IVectorDatabaseConnector, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
+import { ILlamacppGenerativeAIWorkerDocument } from './LlamacppGenerativeAIWorkerDocument';
 
 /**
  * The Llamacpp machine learning connector.
@@ -44,6 +45,12 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private sentences: string[] = [];
+
+  /**
+   * The documents.
+   * @ignore
+   */
+  private documents: ILlamacppGenerativeAIWorkerDocument[] = [];
 
   /**
    * The embedding context.
@@ -98,10 +105,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
   /**
    * Add content to the machine learning model.
+   * @param name The name of the content.
    * @param content The content to add.
    * @returns A promise that resolves when the content has been added.
    */
-  async addContent(content: string): Promise<void> {
+  async addContent(name: string, content: string): Promise<void> {
     if (!this.similarityModel) {
       throw new Error('Model not initialized');
     }
@@ -109,6 +117,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
 
     const sentences = this.splitIntoSentences(content);
+    this.documents.push({
+      name,
+      startIndex: this.sentences.length,
+      length: sentences.length,
+    });
     this.sentences.push(...sentences);
 
     const embeddings: number[][] = await Promise.all(sentences.map(sentence => this.getVector(sentence)));
@@ -116,6 +129,19 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     await this.embeddingContext.dispose();
     this.embeddingContext = undefined;
+  }
+
+  /**
+   * Remove content from the machine learning model.
+   * @param name The name of the content.
+   */
+  removeContent(name: string): void {
+    const document = this.documents.find(document => document.name === name);
+    if (!document) return;
+
+    this.vectorDatabase.remove(Array.from({ length: document.length }, (_, i) => document.startIndex + i));
+    this.sentences.splice(document.startIndex, document.length);
+    this.documents = this.documents.filter(doc => doc !== document);
   }
 
   /**
