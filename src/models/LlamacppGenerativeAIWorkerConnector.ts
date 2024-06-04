@@ -20,7 +20,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * The instructions.
    * @ignore
    */
-  private instructions = 'Keep the answer short and concise.'
+  private instructions = `Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Keep the answer as concise as possible.`;
 
   /**
    * The Llama engine.
@@ -114,6 +114,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       throw new Error('Model not initialized');
     }
 
+    const document = this.documents.find(document => document.name === name);
+    if (document) {
+      this.removeContent(name);
+    }
+
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
 
     const sentences = this.splitIntoSentences(content);
@@ -175,9 +180,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     const tokenEmitter = new EventEmitter();
 
-    this.chatSession.prompt(`Instructions: ${this.instructions}, Context: ${context}, Prompt: ${prompt}`, {
+    this.chatSession.prompt(`Instructions: ${this.instructions}\nContext:\n${context}\nQuestion: ${prompt}\nHelpful Answer:`, {
       maxTokens: 1024,
-      temperature: 0.5,
+      temperature: 1,
       onToken: async (token) => {
         tokenEmitter.emit('token', token);
       }
@@ -210,10 +215,18 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
     const embedding: number[] = await this.getVector(prompt);
-    const context = this.vectorDatabase.search(embedding, 5).map(index => this.sentences.slice(index - 2, index + 3).join(' '));
+    const context = this.vectorDatabase.search(embedding, 5).map(index => {
+      let context = '';
+      const document = this.documents.find(document => document.startIndex <= index && index < document.startIndex + document.length);
+      if (document) {
+        context += `From ${document.name}:\n`
+      }
+      context += this.sentences.slice(index - 2, index + 3).join(' ');
+      return context;
+    });
     await this.embeddingContext.dispose();
 
-    return context.join(' ');
+    return context.join("\n");
   }
 
   /**
