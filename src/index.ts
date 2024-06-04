@@ -1,6 +1,6 @@
 import { GenerativeAIWorkerConnectorConstructor, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
-import { LlamacppGenerativeAIWorkerConnector } from './models/LlamacppGenerativeAIWorkerConnector';
+import { LlamacppGenerativeAIWorkerConnector } from './models/LlamacppGenerativeAIWorkerConnector.js';
 import { ILlamacppGenerativeAIWorkerOptions } from './models/LlamacppGenerativeAIWorkerOptions';
 
 export function getLlamacppGenerativeAIWorkerConnector(options: ILlamacppGenerativeAIWorkerOptions): GenerativeAIWorkerConnectorConstructor {

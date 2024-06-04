@@ -1,4 +1,4 @@
-import { LlamacppGenerativeAIWorkerConnector } from './models/LlamacppGenerativeAIWorkerConnector';
+import { LlamacppGenerativeAIWorkerConnector } from './models/LlamacppGenerativeAIWorkerConnector.js';
 export function getLlamacppGenerativeAIWorkerConnector(options) {
     if (!options) {
         return LlamacppGenerativeAIWorkerConnector;
