@@ -16,6 +16,26 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private instructions;
     /**
+     * The maximum number of tokens to generate.
+     * @ignore
+     */
+    private maxTokens;
+    /**
+     * The temperature.
+     * @ignore
+     */
+    private temperature;
+    /**
+     * The number of contents to include in the context.
+     * @ignore
+     */
+    private maxContents;
+    /**
+     * The number of sentences to include in one content.
+     * @ignore
+     */
+    private maxSentences;
+    /**
      * The Llama engine.
      * @ignore
      */

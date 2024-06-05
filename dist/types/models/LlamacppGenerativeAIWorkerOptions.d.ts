@@ -10,4 +10,24 @@ export interface ILlamacppGenerativeAIWorkerOptions {
      * The path to the similarity model.
      */
     similarityPath?: string;
+    /**
+     * The instructions for the LLM.
+     */
+    instructions?: string;
+    /**
+     * The maximum number of tokens.
+     */
+    maxTokens?: number;
+    /**
+     * The temperature.
+     */
+    temperature?: number;
+    /**
+     * The number of contents to include in the context.
+     */
+    maxContents?: number;
+    /**
+     * The number of sentences to include in one content. Must be a pair number.
+     */
+    maxSentences?: number;
 }

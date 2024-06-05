@@ -20,7 +20,31 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * The instructions.
    * @ignore
    */
-  private instructions = `Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Keep the answer as concise as possible.`;
+  private instructions = `Use the following pieces of context to provide an answer. Keep the answer as concise as possible.`;
+
+  /**
+   * The maximum number of tokens to generate.
+   * @ignore
+   */
+  private maxTokens = 1024;
+
+  /**
+   * The temperature.
+   * @ignore
+   */
+  private temperature = 1;
+
+  /**
+   * The number of contents to include in the context.
+   * @ignore
+   */
+  private maxContents = 5;
+
+  /**
+   * The number of sentences to include in one content.
+   * @ignore
+   */
+  private maxSentences = 6;
 
   /**
    * The Llama engine.
@@ -79,6 +103,21 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     private options?: ILlamacppGenerativeAIWorkerOptions,
   ) {
     this.vectorDatabase = new vectorDatabaseConnector();
+    if (options?.instructions) {
+      this.instructions = options.instructions;
+    }
+    if (options?.maxTokens) {
+      this.maxTokens = options.maxTokens;
+    }
+    if (options?.temperature) {
+      this.temperature = options.temperature;
+    }
+    if (options?.maxContents) {
+      this.maxContents = options.maxContents;
+    }
+    if (options?.maxSentences) {
+      this.maxSentences = options.maxSentences;
+    }
   }
 
   /**
@@ -181,16 +220,18 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     const tokenEmitter = new EventEmitter();
 
     this.chatSession.prompt(`Instructions: ${this.instructions}\nContext:\n${context}\nQuestion: ${prompt}\nHelpful Answer:`, {
-      maxTokens: 1024,
-      temperature: 1,
+      maxTokens: this.maxTokens,
+      temperature: this.temperature,
       onToken: async (token) => {
         tokenEmitter.emit('token', token);
       }
-    });
+    }).catch(e => {});
 
     while (true) {
       const token = await new Promise<Token[]>((resolve) => tokenEmitter.once('token', resolve));
-      if (!token) break;
+      if (!token || this.llmModel.detokenize(token).indexOf('<|end|>') !== -1) {
+        break;
+      }
       yield {
         id: job.id,
         status: 'Completed' as JobStatus,
@@ -200,6 +241,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         },
       };
     }
+
+    this.chatSession.dispose();
+    this.chatSession = undefined;
+    this.chatContext.dispose();
+    this.chatContext = undefined;
   }
 
   /**
@@ -215,13 +261,13 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
     const embedding: number[] = await this.getVector(prompt);
-    const context = this.vectorDatabase.search(embedding, 5).map(index => {
+    const context = this.vectorDatabase.search(embedding, this.maxContents).map(index => {
       let context = '';
       const document = this.documents.find(document => document.startIndex <= index && index < document.startIndex + document.length);
       if (document) {
         context += `From ${document.name}:\n`
       }
-      context += this.sentences.slice(index - 2, index + 3).join(' ');
+      context += this.sentences.slice(index - (this.maxSentences / 2 - 1), index + (this.maxSentences / 2)).join(' ');
       return context;
     });
     await this.embeddingContext.dispose();
