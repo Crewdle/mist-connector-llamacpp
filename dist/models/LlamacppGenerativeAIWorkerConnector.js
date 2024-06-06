@@ -13,7 +13,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * The instructions.
      * @ignore
      */
-    instructions = `Use the following pieces of context to provide an answer. Keep the answer as concise as possible.`;
+    instructions = `The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it will use concepts stored in memory that have very similar weights.`;
     /**
      * The maximum number of tokens to generate.
      * @ignore
@@ -181,7 +181,12 @@ export class LlamacppGenerativeAIWorkerConnector {
             });
         }
         const tokenEmitter = new EventEmitter();
-        this.chatSession.prompt(`Instructions: ${this.instructions}\nContext:\n${context}\nQuestion: ${prompt}\nHelpful Answer:`, {
+        let finalPrompt = `${this.instructions}\n\n`;
+        if (context !== '') {
+            finalPrompt += `Relevant Information:\n\n${context}\n\n`;
+        }
+        finalPrompt += `Conversation:\nHuman: ${prompt}\nAI:`;
+        this.chatSession.prompt(finalPrompt, {
             maxTokens: this.maxTokens,
             temperature: this.temperature,
             onToken: async (token) => {
