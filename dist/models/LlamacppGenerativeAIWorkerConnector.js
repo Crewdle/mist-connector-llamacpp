@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { JobStatus, PromptSource } from '@crewdle/web-sdk-types';
 /**
  * The Llamacpp machine learning connector.
  */
@@ -158,35 +159,67 @@ export class LlamacppGenerativeAIWorkerConnector {
         this.documents = this.documents.filter(doc => doc !== document);
     }
     /**
-     * Prompt the machine learning model.
-     * @param prompt The prompt to use.
-     * @returns An async generator that yields the responses.
+     * Process a job.
+     * @param job The job to process.
+     * @returns A promise that resolves with the job result.
      */
-    async *processJob(job) {
+    async processJob(job) {
         if (!this.llmModel) {
             throw new Error('Model not initialized');
         }
-        if (job.parameters.jobType !== 0) {
-            return;
-        }
-        const { LlamaChatSession } = await import('node-llama-cpp');
-        const prompt = job.parameters.prompt;
-        const context = await this.getContext(prompt);
         if (!this.chatContext) {
             this.chatContext = await this.llmModel.createContext();
         }
         if (!this.chatSession) {
+            const { LlamaChatSession } = await import('node-llama-cpp');
+            this.chatSession = new LlamaChatSession({
+                contextSequence: this.chatContext.getSequence(),
+            });
+        }
+        const prompt = await this.getPrompt(job);
+        const output = await this.chatSession.prompt(prompt, {
+            maxTokens: this.maxTokens,
+            temperature: this.temperature,
+        });
+        const inputTokens = this.llmModel.tokenize(prompt).length;
+        const outputTokens = this.llmModel.tokenize(output).length;
+        this.chatSession.dispose();
+        this.chatSession = undefined;
+        this.chatContext.dispose();
+        this.chatContext = undefined;
+        return {
+            id: job.id,
+            status: JobStatus.Completed,
+            result: {
+                output,
+                inputTokens,
+                outputTokens,
+            },
+        };
+    }
+    /**
+     * Stream a job.
+     * @param job The job to stream.
+     * @returns An async generator that yields the responses.
+     */
+    async *processJobStream(job) {
+        if (!this.llmModel) {
+            throw new Error('Model not initialized');
+        }
+        if (!this.chatContext) {
+            this.chatContext = await this.llmModel.createContext();
+        }
+        if (!this.chatSession) {
+            const { LlamaChatSession } = await import('node-llama-cpp');
             this.chatSession = new LlamaChatSession({
                 contextSequence: this.chatContext.getSequence(),
             });
         }
         const tokenEmitter = new EventEmitter();
-        let finalPrompt = `${this.instructions}\n\n`;
-        if (context !== '') {
-            finalPrompt += `Relevant Information:\n\n${context}\n\n`;
-        }
-        finalPrompt += `Conversation:\nHuman: ${prompt}\nAI:`;
-        this.chatSession.prompt(finalPrompt, {
+        const prompt = await this.getPrompt(job);
+        const inputTokens = this.llmModel.tokenize(prompt).length;
+        let outputTokens = 0;
+        this.chatSession.prompt(prompt, {
             maxTokens: this.maxTokens,
             temperature: this.temperature,
             onToken: async (token) => {
@@ -198,12 +231,14 @@ export class LlamacppGenerativeAIWorkerConnector {
             if (!token || this.llmModel.detokenize(token).indexOf('<|end|>') !== -1) {
                 break;
             }
+            outputTokens += token.length;
             yield {
                 id: job.id,
-                status: 'Completed',
+                status: JobStatus.Partial,
                 result: {
-                    jobType: 0,
                     output: this.llmModel.detokenize(token),
+                    inputTokens,
+                    outputTokens,
                 },
             };
         }
@@ -211,6 +246,25 @@ export class LlamacppGenerativeAIWorkerConnector {
         this.chatSession = undefined;
         this.chatContext.dispose();
         this.chatContext = undefined;
+    }
+    async getPrompt(job) {
+        let context = '';
+        if (job.parameters.useRAG === undefined || job.parameters.useRAG === true) {
+            context = await this.getContext(job.parameters.prompt);
+        }
+        const instructions = job.parameters.instructions ?? this.instructions;
+        let finalPrompt = `${instructions}\n\n`;
+        if (context !== '') {
+            finalPrompt += `Relevant Information:\n\n${context}\n\n`;
+        }
+        finalPrompt += `Conversation:\n`;
+        if (job.parameters.context) {
+            job.parameters.context.forEach(({ source, message }) => {
+                finalPrompt += `${source === PromptSource.AI ? 'AI' : 'Human'}: ${message}\n`;
+            });
+        }
+        finalPrompt += `Human: ${prompt}\nAI:`;
+        return finalPrompt;
     }
     /**
      * Get the context for a prompt.
