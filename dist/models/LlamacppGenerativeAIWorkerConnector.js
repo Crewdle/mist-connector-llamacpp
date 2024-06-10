@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { JobStatus, PromptSource } from '@crewdle/web-sdk-types';
 /**
  * The Llamacpp machine learning connector.
  */
@@ -189,7 +188,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         this.chatContext = undefined;
         return {
             id: job.id,
-            status: JobStatus.Completed,
+            status: 'completed',
             result: {
                 output,
                 inputTokens,
@@ -225,6 +224,8 @@ export class LlamacppGenerativeAIWorkerConnector {
             onToken: async (token) => {
                 tokenEmitter.emit('token', token);
             }
+        }).then(() => {
+            tokenEmitter.emit('token', undefined);
         }).catch(e => { });
         while (true) {
             const token = await new Promise((resolve) => tokenEmitter.once('token', resolve));
@@ -234,7 +235,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             outputTokens += token.length;
             yield {
                 id: job.id,
-                status: JobStatus.Partial,
+                status: 'partial',
                 result: {
                     output: this.llmModel.detokenize(token),
                     inputTokens,
@@ -260,10 +261,10 @@ export class LlamacppGenerativeAIWorkerConnector {
         finalPrompt += `Conversation:\n`;
         if (job.parameters.context) {
             job.parameters.context.forEach(({ source, message }) => {
-                finalPrompt += `${source === PromptSource.AI ? 'AI' : 'Human'}: ${message}\n`;
+                finalPrompt += `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`;
             });
         }
-        finalPrompt += `Human: ${prompt}\nAI:`;
+        finalPrompt += `Human: ${job.parameters.prompt}\nAI:`;
         return finalPrompt;
     }
     /**

@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import {IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, IVectorDatabaseConnector, JobResponse, JobStatus, PromptSource, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, IVectorDatabaseConnector, JobResponse, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerDocument } from './LlamacppGenerativeAIWorkerDocument';
@@ -227,7 +227,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     return {
       id: job.id,
-      status: JobStatus.Completed,
+      status: 'completed' as JobStatus.Completed,
       result: {
         output,
         inputTokens,
@@ -270,6 +270,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       onToken: async (token) => {
         tokenEmitter.emit('token', token);
       }
+    }).then(() => {
+      tokenEmitter.emit('token', undefined);
     }).catch(e => {});
 
     while (true) {
@@ -280,7 +282,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       outputTokens += token.length;
       yield {
         id: job.id,
-        status: JobStatus.Partial,
+        status: 'partial' as JobStatus.Partial,
         result: {
           output: this.llmModel.detokenize(token),
           inputTokens,
@@ -309,10 +311,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     finalPrompt += `Conversation:\n`;
     if (job.parameters.context) {
       job.parameters.context.forEach(({ source, message }) => {
-        finalPrompt += `${source === PromptSource.AI ? 'AI' : 'Human'}: ${message}\n`;
+        finalPrompt += `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`;
       });
     }
-    finalPrompt += `Human: ${prompt}\nAI:`;
+    finalPrompt += `Human: ${job.parameters.prompt}\nAI:`;
 
     return finalPrompt;
   }
