@@ -140,7 +140,14 @@ export class LlamacppGenerativeAIWorkerConnector {
             length: sentences.length,
         });
         this.sentences.push(...sentences);
-        const embeddings = await Promise.all(sentences.map(sentence => this.getVector(sentence)));
+        const embeddings = [];
+        for (let i = 0; i < sentences.length; i++) {
+            try {
+                const embedding = await this.getVector(sentences[i]);
+                embeddings.push(embedding);
+            }
+            catch (e) { }
+        }
         this.vectorDatabase.insert(embeddings);
         await this.embeddingContext.dispose();
         this.embeddingContext = undefined;
@@ -249,22 +256,33 @@ export class LlamacppGenerativeAIWorkerConnector {
         this.chatContext = undefined;
     }
     async getPrompt(job) {
-        let context = '';
-        if (job.parameters.useRAG === undefined || job.parameters.useRAG === true) {
-            context = await this.getContext(job.parameters.prompt);
+        if (!this.llmModel) {
+            throw new Error('Model not initialized');
         }
-        const instructions = job.parameters.instructions ?? this.instructions;
-        let finalPrompt = `${instructions}\n\n`;
-        if (context !== '') {
-            finalPrompt += `Relevant Information:\n\n${context}\n\n`;
+        const { useRAG, prompt, instructions, context } = job.parameters;
+        let finalPrompt = `${instructions ?? this.instructions}\n\n`;
+        if (useRAG === undefined || useRAG === true) {
+            let ragContext = '';
+            ragContext = await this.getContext(prompt);
+            if (ragContext !== '') {
+                finalPrompt += `Relevant Information:\n\n${ragContext}\n\n`;
+            }
         }
         finalPrompt += `Conversation:\n`;
-        if (job.parameters.context) {
-            job.parameters.context.forEach(({ source, message }) => {
-                finalPrompt += `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`;
-            });
+        if (context) {
+            let conversation = '';
+            let conversationLength = this.llmModel.tokenize(finalPrompt).length + this.llmModel.tokenize(`Human: ${prompt}\nAI:`).length;
+            for (let i = context.length - 1; i >= 0; i--) {
+                const { source, message } = context[i];
+                if (conversationLength + this.llmModel.tokenize(message).length > this.llmModel.trainContextSize) {
+                    break;
+                }
+                conversation = `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n${conversation}`;
+                conversationLength += this.llmModel.tokenize(message).length;
+            }
+            finalPrompt += conversation;
         }
-        finalPrompt += `Human: ${job.parameters.prompt}\nAI:`;
+        finalPrompt += `Human: ${prompt}\nAI:`;
         return finalPrompt;
     }
     /**
