@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+const SENTENCE_MAX_LENGTH = 512;
 /**
  * The Llamacpp machine learning connector.
  */
@@ -134,23 +135,32 @@ export class LlamacppGenerativeAIWorkerConnector {
         }
         this.embeddingContext = await this.similarityModel.createEmbeddingContext();
         const sentences = this.splitIntoSentences(content);
-        this.documents.push({
-            name,
-            startIndex: this.sentences.length,
-            length: sentences.length,
-        });
-        this.sentences.push(...sentences);
         const embeddings = [];
+        const sentencesToAdd = [];
         for (let i = 0; i < sentences.length; i++) {
             try {
-                const embedding = await this.getVector(sentences[i]);
-                embeddings.push(embedding);
+                for (let j = 0; j < sentences[i].length; j += SENTENCE_MAX_LENGTH) {
+                    const embedding = await this.getVector(sentences[i].slice(j, j + SENTENCE_MAX_LENGTH));
+                    embeddings.push(embedding);
+                    sentencesToAdd.push(sentences[i].slice(j, j + SENTENCE_MAX_LENGTH));
+                }
             }
-            catch (e) { }
+            catch (e) {
+                console.error(e);
+            }
         }
-        this.vectorDatabase.insert(embeddings);
+        if (embeddings.length > 0) {
+            this.documents.push({
+                name,
+                startIndex: this.sentences.length,
+                length: sentencesToAdd.length,
+            });
+            this.sentences.push(...sentencesToAdd);
+            this.vectorDatabase.insert(embeddings);
+        }
         await this.embeddingContext.dispose();
         this.embeddingContext = undefined;
+        console.log(`Added content: ${name}`);
     }
     /**
      * Remove content from the machine learning model.

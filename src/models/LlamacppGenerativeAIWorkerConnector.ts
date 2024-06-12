@@ -7,6 +7,8 @@ import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobR
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerDocument } from './LlamacppGenerativeAIWorkerDocument';
 
+const SENTENCE_MAX_LENGTH = 512;
+
 /**
  * The Llamacpp machine learning connector.
  */
@@ -162,24 +164,33 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
 
     const sentences = this.splitIntoSentences(content);
-    this.documents.push({
-      name,
-      startIndex: this.sentences.length,
-      length: sentences.length,
-    });
-    this.sentences.push(...sentences);
-
     const embeddings: number[][] = [];
+    const sentencesToAdd: string[] = [];
     for (let i = 0; i < sentences.length; i++) {
       try {
-        const embedding: number[] = await this.getVector(sentences[i]);
-        embeddings.push(embedding);
-      } catch (e) {}
+        for (let j = 0; j < sentences[i].length; j += SENTENCE_MAX_LENGTH) {
+          const embedding: number[] = await this.getVector(sentences[i].slice(j, j + SENTENCE_MAX_LENGTH));
+          embeddings.push(embedding);
+          sentencesToAdd.push(sentences[i].slice(j, j + SENTENCE_MAX_LENGTH));
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
-    this.vectorDatabase.insert(embeddings);
+    if (embeddings.length > 0) {
+      this.documents.push({
+        name,
+        startIndex: this.sentences.length,
+        length: sentencesToAdd.length,
+      });
+      this.sentences.push(...sentencesToAdd);
+      this.vectorDatabase.insert(embeddings);
+    }
 
     await this.embeddingContext.dispose();
     this.embeddingContext = undefined;
+
+    console.log(`Added content: ${name}`);
   }
 
   /**
