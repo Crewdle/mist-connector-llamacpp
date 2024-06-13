@@ -126,10 +126,17 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private getVector;
     /**
-     * Split text into sentences.
-     * @param text The text to split.
-     * @returns The sentences.
+     * Clean the text.
+     * @param text The text to clean.
+     * @returns The cleaned text.
      * @ignore
      */
-    private splitIntoSentences;
+    private cleanText;
+    /**
+     * Normalize a vector.
+     * @param vector The vector to normalize.
+     * @returns The normalized vector.
+     * @ignore
+     */
+    private normalizeVector;
 }

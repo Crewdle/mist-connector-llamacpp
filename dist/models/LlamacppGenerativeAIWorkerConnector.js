@@ -29,12 +29,12 @@ export class LlamacppGenerativeAIWorkerConnector {
      * The number of contents to include in the context.
      * @ignore
      */
-    maxContents = 5;
+    maxContents = 10;
     /**
      * The number of sentences to include in one content.
      * @ignore
      */
-    maxSentences = 6;
+    maxSentences = 2;
     /**
      * The Llama engine.
      * @ignore
@@ -134,28 +134,23 @@ export class LlamacppGenerativeAIWorkerConnector {
             this.removeContent(name);
         }
         this.embeddingContext = await this.similarityModel.createEmbeddingContext();
-        const sentences = this.splitIntoSentences(content);
         const embeddings = [];
-        const sentencesToAdd = [];
-        for (let i = 0; i < sentences.length; i++) {
-            try {
-                for (let j = 0; j < sentences[i].length; j += SENTENCE_MAX_LENGTH) {
-                    const embedding = await this.getVector(sentences[i].slice(j, j + SENTENCE_MAX_LENGTH));
-                    embeddings.push(embedding);
-                    sentencesToAdd.push(sentences[i].slice(j, j + SENTENCE_MAX_LENGTH));
-                }
+        try {
+            for (let j = 0; j < content.length; j += SENTENCE_MAX_LENGTH) {
+                const embedding = await this.getVector(content.slice(j, j + SENTENCE_MAX_LENGTH));
+                this.sentences.push(content);
+                embeddings.push(embedding);
             }
-            catch (e) {
-                console.error(e);
-            }
+        }
+        catch (e) {
+            console.error(e);
         }
         if (embeddings.length > 0) {
             this.documents.push({
                 name,
                 startIndex: this.sentences.length,
-                length: sentencesToAdd.length,
+                length: embeddings.length,
             });
-            this.sentences.push(...sentencesToAdd);
             this.vectorDatabase.insert(embeddings);
         }
         await this.embeddingContext.dispose();
@@ -326,21 +321,29 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     async getVector(content) {
-        if (!this.llmModel) {
-            throw new Error('Model not initialized');
-        }
         if (!this.embeddingContext) {
             throw new Error('Embedding context not initialized');
         }
-        return (await this.embeddingContext.getEmbeddingFor(content)).vector;
+        const vector = (await this.embeddingContext.getEmbeddingFor(this.cleanText(content))).vector;
+        return this.normalizeVector(vector);
     }
     /**
-     * Split text into sentences.
-     * @param text The text to split.
-     * @returns The sentences.
+     * Clean the text.
+     * @param text The text to clean.
+     * @returns The cleaned text.
      * @ignore
      */
-    splitIntoSentences(text) {
-        return text.match(/[^\.!\?]+[\.!\?]+/g)?.filter(sentence => sentence.trim().length > 0) || [];
+    cleanText(text) {
+        return text.slice().replace(/posted at.*$/, '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    }
+    /**
+     * Normalize a vector.
+     * @param vector The vector to normalize.
+     * @returns The normalized vector.
+     * @ignore
+     */
+    normalizeVector(vector) {
+        const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+        return vector.map((value) => value / norm);
     }
 }
