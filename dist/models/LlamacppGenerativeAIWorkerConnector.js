@@ -138,7 +138,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         try {
             for (let j = 0; j < content.length; j += SENTENCE_MAX_LENGTH) {
                 const embedding = await this.getVector(content.slice(j, j + SENTENCE_MAX_LENGTH));
-                this.sentences.push(content);
+                this.sentences.push(content.slice(j, j + SENTENCE_MAX_LENGTH));
                 embeddings.push(embedding);
             }
         }
@@ -283,7 +283,7 @@ export class LlamacppGenerativeAIWorkerConnector {
                     break;
                 }
                 conversation = `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n${conversation}`;
-                conversationLength += this.llmModel.tokenize(message).length;
+                conversationLength += this.llmModel.tokenize(`${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`).length;
             }
             finalPrompt += conversation;
         }
