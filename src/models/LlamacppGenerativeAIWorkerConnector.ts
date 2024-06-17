@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, IVectorDatabaseConnector, JobResponse, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, IPromptOptions, IVectorDatabaseConnector, JobResponse, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerDocument } from './LlamacppGenerativeAIWorkerDocument';
@@ -224,14 +224,18 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     const prompt = await this.getPrompt(job);
 
+    console.log('Prompt:', prompt);
+
     const output = await this.chatSession.prompt(prompt, {
-      maxTokens: this.maxTokens,
-      temperature: this.temperature,
+      maxTokens: job.parameters.maxTokens ?? this.maxTokens,
+      temperature: job.parameters.temperature ?? this.temperature,
     });
 
     const inputTokens = this.llmModel.tokenize(prompt).length;
     const outputTokens = this.llmModel.tokenize(output).length;
 
+    console.log('Output:', output);
+    
     this.chatSession.dispose();
     this.chatSession = undefined;
     this.chatContext.dispose();
@@ -244,6 +248,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         output,
         inputTokens,
         outputTokens,
+        contentSize: this.sentences.length,
       },
     };
   }
@@ -277,8 +282,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     let outputTokens = 0;
 
     this.chatSession.prompt(prompt, {
-      maxTokens: this.maxTokens,
-      temperature: this.temperature,
+      maxTokens: job.parameters.maxTokens ?? this.maxTokens,
+      temperature: job.parameters.temperature ?? this.temperature,
       onToken: async (token) => {
         tokenEmitter.emit('token', token);
       }
@@ -299,6 +304,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
           output: this.llmModel.detokenize(token),
           inputTokens,
           outputTokens,
+          contentSize: this.sentences.length,
         },
       };
     }
@@ -318,12 +324,17 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     let finalPrompt = `${instructions ?? this.instructions}\n\n`;
 
+    finalPrompt += `Relevant Information:\n\n`;
     if (useRAG === undefined || useRAG === true) {
       let ragContext = '';
-      ragContext = await this.getContext(prompt);
+      ragContext = await this.getContext(prompt, job.parameters);
       if (ragContext !== '') {
-        finalPrompt += `Relevant Information:\n\n${ragContext}\n\n`;
+        finalPrompt += `${ragContext}\n\n`;
+      } else {
+        finalPrompt += `No relevant information found.\n\n`;
       }
+    } else {
+      finalPrompt += `No relevant information used.\n\n`;
     }
 
     finalPrompt += `Conversation:\n`;
@@ -332,7 +343,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       let conversationLength = this.llmModel.tokenize(finalPrompt).length + this.llmModel.tokenize(`Human: ${prompt}\nAI:`).length;
       for (let i = context.length - 1; i >= 0; i--) {
         const { source, message } = context[i];
-        if (conversationLength + this.llmModel.tokenize(message).length > this.llmModel.trainContextSize) {
+        if (conversationLength + this.llmModel.tokenize(message).length > this.llmModel.trainContextSize * 0.75) {
           break;
         }
         conversation = `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n${conversation}`;
@@ -352,20 +363,21 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns A promise that resolves to the context.
    * @ignore
    */
-  private async getContext(prompt: string): Promise<string> {
+  private async getContext(prompt: string, options?: IPromptOptions): Promise<string> {
     if (!this.similarityModel) {
       throw new Error('Model not initialized');
     }
 
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
     const embedding: number[] = await this.getVector(prompt);
-    const context = this.vectorDatabase.search(embedding, this.maxContents).map(index => {
+    const maxSentences = options?.maxSentences ?? this.maxSentences;
+    const context = this.vectorDatabase.search(embedding, options?.maxContents ?? this.maxContents, options?.minRelevance, options?.ragStartingIndex).map(index => {
       let context = '';
       const document = this.documents.find(document => document.startIndex <= index && index < document.startIndex + document.length);
       if (document) {
         context += `From ${document.name}:\n`
       }
-      context += this.sentences.slice(index - (this.maxSentences / 2 - 1), index + (this.maxSentences / 2)).join(' ');
+      context += this.sentences.slice(index - (maxSentences / 2 - 1), index + (maxSentences / 2)).join(' ');
       return context;
     });
     await this.embeddingContext.dispose();
