@@ -27,7 +27,7 @@ export interface ILlamacppGenerativeAIWorkerOptions {
      */
     maxContents?: number;
     /**
-     * The number of sentences to include in one content. Must be a pair number.
+     * The number of chunks to include in one content. Must be a pair number.
      */
-    maxSentences?: number;
+    maxChunks?: number;
 }
