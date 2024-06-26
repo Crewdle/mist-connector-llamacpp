@@ -2,12 +2,12 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaChatSession, LlamaModel, LlamaEmbeddingContext, LlamaContext, Token } from 'node-llama-cpp';
 
-import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, IVectorDatabaseConnector, JobResponse, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, IPromptOptions, IVectorDatabaseConnector, JobResponse, JobStatus, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerDocument } from './LlamacppGenerativeAIWorkerDocument';
 
-const SENTENCE_MAX_LENGTH = 512;
+const CHUNK_MAX_LENGTH = 512;
 
 /**
  * The Llamacpp machine learning connector.
@@ -44,10 +44,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private maxContents = 10;
 
   /**
-   * The number of sentences to include in one content.
+   * The number of chunks to include in one content.
    * @ignore
    */
-  private maxSentences = 2;
+  private maxChunks = 2;
 
   /**
    * The Llama engine.
@@ -68,10 +68,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private similarityModel?: LlamaModel;
 
   /**
-   * The sentences.
+   * The chunks of documents.
    * @ignore
    */
-  private sentences: string[] = [];
+  private chunks: string[] = [];
 
   /**
    * The documents.
@@ -100,6 +100,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   /**
    * The constructor.
    * @param vectorDatabaseConnector The vector database connector constructor.
+   * @param options The options.
    */
   constructor(
     vectorDatabaseConnector: VectorDatabaseConnectorConstructor,
@@ -118,8 +119,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (options?.maxContents) {
       this.maxContents = options.maxContents;
     }
-    if (options?.maxSentences) {
-      this.maxSentences = options.maxSentences;
+    if (options?.maxChunks) {
+      this.maxChunks = options.maxChunks;
     }
   }
 
@@ -165,9 +166,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     const embeddings: number[][] = [];
     try {
-      for (let j = 0; j < content.length; j += SENTENCE_MAX_LENGTH) {
-        const embedding: number[] = await this.getVector(content.slice(j, j + SENTENCE_MAX_LENGTH));
-        this.sentences.push(content.slice(j, j + SENTENCE_MAX_LENGTH));
+      for (let j = 0; j < content.length; j += CHUNK_MAX_LENGTH) {
+        const embedding: number[] = await this.getVector(content.slice(j, j + CHUNK_MAX_LENGTH));
+        this.chunks.push(content.slice(j, j + CHUNK_MAX_LENGTH));
         embeddings.push(embedding);
       }
     } catch (e) {
@@ -176,7 +177,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (embeddings.length > 0) {
       this.documents.push({
         name,
-        startIndex: this.sentences.length,
+        startIndex: this.chunks.length,
         length: embeddings.length,
       });
       this.vectorDatabase.insert(embeddings);
@@ -184,8 +185,6 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     await this.embeddingContext.dispose();
     this.embeddingContext = undefined;
-
-    console.log(`Added content: ${name}`);
   }
 
   /**
@@ -197,7 +196,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (!document) return;
 
     this.vectorDatabase.remove(Array.from({ length: document.length }, (_, i) => document.startIndex + i));
-    this.sentences.splice(document.startIndex, document.length);
+    this.chunks.splice(document.startIndex, document.length);
     this.documents = this.documents.filter(doc => doc !== document);
   }
 
@@ -225,13 +224,13 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     const prompt = await this.getPrompt(job);
 
     const output = await this.chatSession.prompt(prompt, {
-      maxTokens: this.maxTokens,
-      temperature: this.temperature,
+      maxTokens: job.parameters.maxTokens ?? this.maxTokens,
+      temperature: job.parameters.temperature ?? this.temperature,
     });
 
     const inputTokens = this.llmModel.tokenize(prompt).length;
     const outputTokens = this.llmModel.tokenize(output).length;
-
+    
     this.chatSession.dispose();
     this.chatSession = undefined;
     this.chatContext.dispose();
@@ -244,6 +243,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         output,
         inputTokens,
         outputTokens,
+        contentSize: this.chunks.length,
       },
     };
   }
@@ -277,8 +277,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     let outputTokens = 0;
 
     this.chatSession.prompt(prompt, {
-      maxTokens: this.maxTokens,
-      temperature: this.temperature,
+      maxTokens: job.parameters.maxTokens ?? this.maxTokens,
+      temperature: job.parameters.temperature ?? this.temperature,
       onToken: async (token) => {
         tokenEmitter.emit('token', token);
       }
@@ -299,6 +299,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
           output: this.llmModel.detokenize(token),
           inputTokens,
           outputTokens,
+          contentSize: this.chunks.length,
         },
       };
     }
@@ -314,25 +315,30 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       throw new Error('Model not initialized');
     }
 
-    const { useRAG, prompt, instructions, context } = job.parameters;
+    const { useRAG, prompt, instructions, history } = job.parameters;
 
     let finalPrompt = `${instructions ?? this.instructions}\n\n`;
 
+    finalPrompt += `Relevant Information:\n\n`;
     if (useRAG === undefined || useRAG === true) {
       let ragContext = '';
-      ragContext = await this.getContext(prompt);
+      ragContext = await this.getContext(prompt, job.parameters);
       if (ragContext !== '') {
-        finalPrompt += `Relevant Information:\n\n${ragContext}\n\n`;
+        finalPrompt += `${ragContext}\n\n`;
+      } else {
+        finalPrompt += `No relevant information found.\n\n`;
       }
+    } else {
+      finalPrompt += `No relevant information used.\n\n`;
     }
 
     finalPrompt += `Conversation:\n`;
-    if (context) {
+    if (history) {
       let conversation = '';
       let conversationLength = this.llmModel.tokenize(finalPrompt).length + this.llmModel.tokenize(`Human: ${prompt}\nAI:`).length;
-      for (let i = context.length - 1; i >= 0; i--) {
-        const { source, message } = context[i];
-        if (conversationLength + this.llmModel.tokenize(message).length > this.llmModel.trainContextSize) {
+      for (let i = history.length - 1; i >= 0; i--) {
+        const { source, message } = history[i];
+        if (conversationLength + this.llmModel.tokenize(message).length > this.llmModel.trainContextSize * 0.75) {
           break;
         }
         conversation = `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n${conversation}`;
@@ -352,20 +358,21 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns A promise that resolves to the context.
    * @ignore
    */
-  private async getContext(prompt: string): Promise<string> {
+  private async getContext(prompt: string, options?: IPromptOptions): Promise<string> {
     if (!this.similarityModel) {
       throw new Error('Model not initialized');
     }
 
     this.embeddingContext = await this.similarityModel.createEmbeddingContext();
     const embedding: number[] = await this.getVector(prompt);
-    const context = this.vectorDatabase.search(embedding, this.maxContents).map(index => {
+    const maxChunks = options?.maxChunks ?? this.maxChunks;
+    const context = this.vectorDatabase.search(embedding, options?.maxContents ?? this.maxContents, options?.minRelevance, options?.ragStartingIndex).map(index => {
       let context = '';
       const document = this.documents.find(document => document.startIndex <= index && index < document.startIndex + document.length);
       if (document) {
         context += `From ${document.name}:\n`
       }
-      context += this.sentences.slice(index - (this.maxSentences / 2 - 1), index + (this.maxSentences / 2)).join(' ');
+      context += this.chunks.slice(index - (maxChunks / 2 - 1), index + (maxChunks / 2)).join(' ');
       return context;
     });
     await this.embeddingContext.dispose();
@@ -395,7 +402,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private cleanText(text: string): string {
-    return text.slice().replace(/posted at.*$/, '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    return text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
   }
 
   /**

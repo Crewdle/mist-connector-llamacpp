@@ -31,10 +31,10 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private maxContents;
     /**
-     * The number of sentences to include in one content.
+     * The number of chunks to include in one content.
      * @ignore
      */
-    private maxSentences;
+    private maxChunks;
     /**
      * The Llama engine.
      * @ignore
@@ -51,10 +51,10 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private similarityModel?;
     /**
-     * The sentences.
+     * The chunks of documents.
      * @ignore
      */
-    private sentences;
+    private chunks;
     /**
      * The documents.
      * @ignore
@@ -78,6 +78,7 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
     /**
      * The constructor.
      * @param vectorDatabaseConnector The vector database connector constructor.
+     * @param options The options.
      */
     constructor(vectorDatabaseConnector: VectorDatabaseConnectorConstructor, options?: ILlamacppGenerativeAIWorkerOptions | undefined);
     /**
