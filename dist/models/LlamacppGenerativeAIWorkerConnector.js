@@ -344,7 +344,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     cleanText(text) {
-        return text.slice().trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
+        return text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
     }
     /**
      * Normalize a vector.

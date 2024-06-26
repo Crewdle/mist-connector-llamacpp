@@ -402,7 +402,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private cleanText(text: string): string {
-    return text.slice().trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
+    return text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
   }
 
   /**
