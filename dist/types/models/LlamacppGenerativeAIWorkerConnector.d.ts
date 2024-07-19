@@ -1,15 +1,10 @@
-import type { IGenerativeAIWorkerConnector, IJobParametersAI, IJobRequest, IJobResultAI, JobResponse, VectorDatabaseConnectorConstructor } from '@crewdle/web-sdk-types';
+import type { IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 /**
  * The Llamacpp machine learning connector.
  */
 export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerConnector {
     private options?;
-    /**
-     * The vector database connector.
-     * @ignore
-     */
-    private vectorDatabase;
     /**
      * The instructions.
      * @ignore
@@ -26,103 +21,42 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private temperature;
     /**
-     * The number of contents to include in the context.
-     * @ignore
-     */
-    private maxContents;
-    /**
-     * The number of chunks to include in one content.
-     * @ignore
-     */
-    private maxChunks;
-    /**
      * The Llama engine.
      * @ignore
      */
     private engine?;
     /**
-     * The model to use for language modeling.
-     * @ignore
+     * The models.
      */
-    private llmModel?;
-    /**
-     * The model to use for sentence similarity.
-     * @ignore
-     */
-    private similarityModel?;
-    /**
-     * The chunks of documents.
-     * @ignore
-     */
-    private chunks;
-    /**
-     * The documents.
-     * @ignore
-     */
-    private documents;
-    /**
-     * The embedding context.
-     * @ignore
-     */
-    private embeddingContext?;
-    /**
-     * The chat context.
-     * @ignore
-     */
-    private chatContext?;
-    /**
-     * The chat session.
-     * @ignore
-     */
-    private chatSession?;
+    private models;
     /**
      * The constructor.
-     * @param vectorDatabaseConnector The vector database connector constructor.
      * @param options The options.
      */
-    constructor(vectorDatabaseConnector: VectorDatabaseConnectorConstructor, options?: ILlamacppGenerativeAIWorkerOptions | undefined);
+    constructor(options?: ILlamacppGenerativeAIWorkerOptions | undefined);
     /**
      * Initialize the machine learning model.
-     * @param llmModel The path to the LLM model.
-     * @param similarityModel The path to the similarity model.
+     * @param models The models to initialize.
      */
-    initialize(llmModel?: string, similarityModel?: string): Promise<void>;
-    /**
-     * Add content to the machine learning model.
-     * @param name The name of the content.
-     * @param content The content to add.
-     * @returns A promise that resolves when the content has been added.
-     */
-    addContent(name: string, content: string): Promise<void>;
-    /**
-     * Remove content from the machine learning model.
-     * @param name The name of the content.
-     */
-    removeContent(name: string): void;
+    initialize(models: Map<string, string>): Promise<void>;
     /**
      * Process a job.
-     * @param job The job to process.
+     * @param parameters The job parameters.
      * @returns A promise that resolves with the job result.
      */
-    processJob(job: IJobRequest<IJobParametersAI>): Promise<JobResponse<IJobResultAI>>;
+    processJob(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): Promise<IJobResultAI>;
     /**
      * Stream a job.
-     * @param job The job to stream.
+     * @param parameters The job parameters.
      * @returns An async generator that yields the responses.
      */
-    processJobStream(job: IJobRequest<IJobParametersAI>): AsyncGenerator<JobResponse<IJobResultAI>>;
+    processJobStream(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): AsyncGenerator<IJobResultAI>;
     private getPrompt;
     /**
-     * Get the context for a prompt.
-     * @param prompt The prompt.
-     * @returns A promise that resolves to the context.
-     * @ignore
-     */
-    private getContext;
-    /**
      * Get the vector for some content.
+     * @param embeddingContext The embedding context.
      * @param content The content.
-     * @returns A promise that resolves to the embedding.
+     * @returns A promise that resolves to the vector.
      * @ignore
      */
     private getVector;
