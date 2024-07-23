@@ -34,14 +34,14 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     constructor(options) {
         this.options = options;
-        if (options?.instructions) {
-            this.instructions = options.instructions;
+        if (this.options?.instructions) {
+            this.instructions = this.options.instructions;
         }
-        if (options?.maxTokens) {
-            this.maxTokens = options.maxTokens;
+        if (this.options?.maxTokens) {
+            this.maxTokens = this.options.maxTokens;
         }
-        if (options?.temperature) {
-            this.temperature = options.temperature;
+        if (this.options?.temperature) {
+            this.temperature = this.options.temperature;
         }
     }
     /**
@@ -61,10 +61,10 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns A promise that resolves with the job result.
      */
     async processJob(parameters, options) {
-        if (!this.models.has(options.model.id)) {
+        const model = this.models.get(options.model.id);
+        if (!model) {
             throw new Error('Model not initialized');
         }
-        const model = this.models.get(options.model.id);
         if (options.model.outputType === 'vector') {
             const context = await model.createEmbeddingContext();
             const vector = await this.getVector(context, parameters.prompt);
@@ -99,15 +99,14 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns An async generator that yields the responses.
      */
     async *processJobStream(parameters, options) {
-        if (!this.models.has(options.model.id)) {
+        const model = this.models.get(options.model.id);
+        if (!model) {
             throw new Error('Model not initialized');
         }
-        const model = this.models.get(options.model.id);
-        let context;
         if (options.model.outputType === 'vector') {
             throw new Error('Vector output type not supported for streaming');
         }
-        context = await model.createContext();
+        const context = await model.createContext();
         const { LlamaChatSession } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
             contextSequence: context.getSequence(),
@@ -127,8 +126,11 @@ export class LlamacppGenerativeAIWorkerConnector {
         }).catch(e => { });
         while (true) {
             const token = await new Promise((resolve) => tokenEmitter.once('token', resolve));
+            if (token === undefined) {
+                break;
+            }
             const output = model.detokenize(token);
-            if (!token || output.indexOf('<|end|>') !== -1) {
+            if (output.indexOf('<|end|>') !== -1) {
                 break;
             }
             outputTokens += token.length;
