@@ -23,7 +23,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * The Llama engine.
      * @ignore
      */
-    engine;
+    static engine;
     /**
      * The models.
      */
@@ -44,15 +44,31 @@ export class LlamacppGenerativeAIWorkerConnector {
             this.temperature = this.options.temperature;
         }
     }
+    static async getEngine() {
+        if (this.engine) {
+            return this.engine;
+        }
+        const { getLlama } = await import('node-llama-cpp');
+        this.engine = await getLlama();
+        return this.engine;
+    }
     /**
      * Initialize the machine learning model.
      * @param models The models to initialize.
      */
     async initialize(models) {
-        const { getLlama } = await import('node-llama-cpp');
-        this.engine = await getLlama();
+        const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
         for (const [modelName, modelPath] of models) {
-            this.models.set(modelName, await this.engine.loadModel({ modelPath }));
+            this.models.set(modelName, await engine.loadModel({ modelPath }));
+        }
+    }
+    /**
+     * Close the machine learning model.
+     * @returns A promise that resolves when the model has been closed.
+     */
+    async close() {
+        for (const model of this.models.values()) {
+            await model.dispose();
         }
     }
     /**

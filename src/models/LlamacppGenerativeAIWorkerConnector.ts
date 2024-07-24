@@ -32,7 +32,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * The Llama engine.
    * @ignore
    */
-  private engine?: Llama;
+  private static engine?: Llama;
 
   /**
    * The models.
@@ -57,15 +57,34 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     }
   }
 
+  private static async getEngine(): Promise<Llama> {
+    if (this.engine) {
+      return this.engine;
+    }
+
+    const { getLlama } = await import('node-llama-cpp');
+    this.engine = await getLlama();
+    return this.engine;
+  }
+
   /**
    * Initialize the machine learning model.
    * @param models The models to initialize.
    */
   async initialize(models: Map<string, string>): Promise<void> {
-    const { getLlama } = await import('node-llama-cpp');
-    this.engine = await getLlama();
+    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
     for (const [modelName, modelPath] of models) {
-      this.models.set(modelName, await this.engine.loadModel({ modelPath }));
+      this.models.set(modelName, await engine.loadModel({ modelPath }));
+    }
+  }
+
+  /**
+   * Close the machine learning model.
+   * @returns A promise that resolves when the model has been closed.
+   */
+  async close(): Promise<void> {
+    for (const model of this.models.values()) {
+      await model.dispose();
     }
   }
 

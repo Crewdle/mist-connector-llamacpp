@@ -24,7 +24,7 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * The Llama engine.
      * @ignore
      */
-    private engine?;
+    private static engine?;
     /**
      * The models.
      */
@@ -34,11 +34,17 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @param options The options.
      */
     constructor(options?: ILlamacppGenerativeAIWorkerOptions | undefined);
+    private static getEngine;
     /**
      * Initialize the machine learning model.
      * @param models The models to initialize.
      */
     initialize(models: Map<string, string>): Promise<void>;
+    /**
+     * Close the machine learning model.
+     * @returns A promise that resolves when the model has been closed.
+     */
+    close(): Promise<void>;
     /**
      * Process a job.
      * @param parameters The job parameters.
