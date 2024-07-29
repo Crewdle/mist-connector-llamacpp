@@ -20,14 +20,20 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     temperature = 1;
     /**
+     * The workflow ID.
+     * @ignore
+     */
+    workflowId;
+    /**
      * The Llama engine.
      * @ignore
      */
     static engine;
     /**
      * The models.
+     * @ignore
      */
-    models = new Map();
+    static models = new Map();
     /**
      * The constructor.
      * @param options The options.
@@ -44,6 +50,11 @@ export class LlamacppGenerativeAIWorkerConnector {
             this.temperature = this.options.temperature;
         }
     }
+    /**
+     * Get the Llama engine.
+     * @returns A promise that resolves with the Llama engine.
+     * @ignore
+     */
     static async getEngine() {
         if (this.engine) {
             return this.engine;
@@ -54,12 +65,23 @@ export class LlamacppGenerativeAIWorkerConnector {
     }
     /**
      * Initialize the machine learning model.
+     * @param workflowId The workflow ID.
      * @param models The models to initialize.
      */
-    async initialize(models) {
+    async initialize(workflowId, models) {
         const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
         for (const [modelName, modelPath] of models) {
-            this.models.set(modelName, await engine.loadModel({ modelPath }));
+            if (!LlamacppGenerativeAIWorkerConnector.models.has(modelName)) {
+                LlamacppGenerativeAIWorkerConnector.models.set(modelName, {
+                    model: await engine.loadModel({ modelPath }),
+                    workflows: new Set(),
+                });
+            }
+            const model = LlamacppGenerativeAIWorkerConnector.models.get(modelName);
+            if (model) {
+                model.workflows.add(workflowId);
+            }
+            this.workflowId = workflowId;
         }
     }
     /**
@@ -67,8 +89,16 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns A promise that resolves when the model has been closed.
      */
     async close() {
-        for (const model of this.models.values()) {
-            await model.dispose();
+        if (!this.workflowId) {
+            return;
+        }
+        for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
+            model.workflows.delete(this.workflowId);
+            LlamacppGenerativeAIWorkerConnector.models.set(id, model);
+            if (model.workflows.size === 0) {
+                await model.model.dispose();
+                LlamacppGenerativeAIWorkerConnector.models.delete(id);
+            }
         }
     }
     /**
@@ -77,7 +107,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns A promise that resolves with the job result.
      */
     async processJob(parameters, options) {
-        const model = this.models.get(options.model.id);
+        const model = LlamacppGenerativeAIWorkerConnector.models.get(options.model.id)?.model;
         if (!model) {
             throw new Error('Model not initialized');
         }
@@ -115,7 +145,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns An async generator that yields the responses.
      */
     async *processJobStream(parameters, options) {
-        const model = this.models.get(options.model.id);
+        const model = LlamacppGenerativeAIWorkerConnector.models.get(options.model.id)?.model;
         if (!model) {
             throw new Error('Model not initialized');
         }

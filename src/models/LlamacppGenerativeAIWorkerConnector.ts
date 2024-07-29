@@ -5,6 +5,7 @@ import type { Llama, LlamaModel, LlamaEmbeddingContext, Token } from 'node-llama
 import type { GenerativeAIModelOutputType, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
+import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
 
 /**
  * The Llamacpp machine learning connector.
@@ -29,6 +30,12 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private temperature = 1;
 
   /**
+   * The workflow ID.
+   * @ignore
+   */
+  private workflowId?: string;
+
+  /**
    * The Llama engine.
    * @ignore
    */
@@ -36,8 +43,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
   /**
    * The models.
+   * @ignore
    */
-  private models: Map<string, LlamaModel> = new Map();
+  private static models: Map<string, ILlamacppGenerativeAIWorkerModel> = new Map();
 
   /**
    * The constructor.
@@ -57,6 +65,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     }
   }
 
+  /**
+   * Get the Llama engine.
+   * @returns A promise that resolves with the Llama engine.
+   * @ignore
+   */
   private static async getEngine(): Promise<Llama> {
     if (this.engine) {
       return this.engine;
@@ -69,12 +82,23 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
   /**
    * Initialize the machine learning model.
+   * @param workflowId The workflow ID.
    * @param models The models to initialize.
    */
-  async initialize(models: Map<string, string>): Promise<void> {
+  async initialize(workflowId: string, models: Map<string, string>): Promise<void> {
     const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
     for (const [modelName, modelPath] of models) {
-      this.models.set(modelName, await engine.loadModel({ modelPath }));
+      if (!LlamacppGenerativeAIWorkerConnector.models.has(modelName)) {
+        LlamacppGenerativeAIWorkerConnector.models.set(modelName, {
+          model: await engine.loadModel({ modelPath }),
+          workflows: new Set(),
+        });
+      }
+      const model = LlamacppGenerativeAIWorkerConnector.models.get(modelName);
+      if (model) {
+        model.workflows.add(workflowId);
+      }
+      this.workflowId = workflowId;
     }
   }
 
@@ -83,8 +107,16 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns A promise that resolves when the model has been closed.
    */
   async close(): Promise<void> {
-    for (const model of this.models.values()) {
-      await model.dispose();
+    if (!this.workflowId) {
+      return;
+    }
+    for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
+      model.workflows.delete(this.workflowId);
+      LlamacppGenerativeAIWorkerConnector.models.set(id, model);
+      if (model.workflows.size === 0) {
+        await model.model.dispose();
+        LlamacppGenerativeAIWorkerConnector.models.delete(id);
+      }
     }
   }
 
@@ -94,7 +126,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns A promise that resolves with the job result.
    */
   async processJob(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): Promise<IJobResultAI> {
-    const model = this.models.get(options.model.id);
+    const model = LlamacppGenerativeAIWorkerConnector.models.get(options.model.id)?.model;
     if (!model) {
       throw new Error('Model not initialized');
     }
@@ -140,7 +172,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns An async generator that yields the responses.
    */
   async *processJobStream(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): AsyncGenerator<IJobResultAI> {
-    const model = this.models.get(options.model.id);
+    const model = LlamacppGenerativeAIWorkerConnector.models.get(options.model.id)?.model;
     if (!model) {
       throw new Error('Model not initialized');
     }
