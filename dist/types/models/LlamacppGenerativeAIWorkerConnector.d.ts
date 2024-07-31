@@ -26,6 +26,16 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private workflowId?;
     /**
+     * The context.
+     * @ignore
+     */
+    private context?;
+    /**
+     * The embedding context.
+     * @ignore
+     */
+    private embeddingContext?;
+    /**
      * The Llama engine.
      * @ignore
      */

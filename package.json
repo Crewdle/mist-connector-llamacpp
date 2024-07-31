@@ -24,7 +24,7 @@
     "dist/"
   ],
   "dependencies": {
-    "node-llama-cpp": "3.0.0-beta.32"
+    "node-llama-cpp": "3.0.0-beta.40"
   },
   "devDependencies": {
     "@crewdle/web-sdk-types": "^1.0.16",

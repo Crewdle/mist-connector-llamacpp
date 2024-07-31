@@ -25,6 +25,16 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     workflowId;
     /**
+     * The context.
+     * @ignore
+     */
+    context;
+    /**
+     * The embedding context.
+     * @ignore
+     */
+    embeddingContext;
+    /**
      * The Llama engine.
      * @ignore
      */
@@ -112,17 +122,32 @@ export class LlamacppGenerativeAIWorkerConnector {
             throw new Error('Model not initialized');
         }
         if (options.model.outputType === 'vector') {
-            const context = await model.createEmbeddingContext();
-            const vector = await this.getVector(context, parameters.prompt);
-            await context.dispose();
+            if (!this.embeddingContext || this.embeddingContext.modelId !== options.model.id) {
+                if (this.embeddingContext) {
+                    await this.embeddingContext.instance.dispose();
+                }
+                this.embeddingContext = {
+                    modelId: options.model.id,
+                    instance: await model.createEmbeddingContext(),
+                };
+            }
+            const vector = await this.getVector(this.embeddingContext.instance, parameters.prompt);
             return {
                 output: vector,
             };
         }
-        const context = await model.createContext();
+        if (!this.context || this.context.modelId !== options.model.id) {
+            if (this.context) {
+                await this.context.instance.dispose();
+            }
+            this.context = {
+                modelId: options.model.id,
+                instance: await model.createContext(),
+            };
+        }
         const { LlamaChatSession } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
-            contextSequence: context.getSequence(),
+            contextSequence: this.context.instance.getSequence(),
         });
         const prompt = await this.getPrompt(parameters, model);
         const output = await session.prompt(prompt, {
@@ -132,7 +157,6 @@ export class LlamacppGenerativeAIWorkerConnector {
         const inputTokens = model.tokenize(prompt).length;
         const outputTokens = model.tokenize(output).length;
         session.dispose();
-        await context.dispose();
         return {
             output,
             inputTokens,
@@ -152,42 +176,45 @@ export class LlamacppGenerativeAIWorkerConnector {
         if (options.model.outputType === 'vector') {
             throw new Error('Vector output type not supported for streaming');
         }
-        const context = await model.createContext();
+        if (!this.context || this.context.modelId !== options.model.id) {
+            if (this.context) {
+                await this.context.instance.dispose();
+            }
+            this.context = {
+                modelId: options.model.id,
+                instance: await model.createContext(),
+            };
+        }
         const { LlamaChatSession } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
-            contextSequence: context.getSequence(),
+            contextSequence: this.context.instance.getSequence(),
         });
         const prompt = await this.getPrompt(parameters, model);
         const inputTokens = model.tokenize(prompt).length;
         let outputTokens = 0;
-        const tokenEmitter = new EventEmitter();
+        const textEmitter = new EventEmitter();
         session.prompt(prompt, {
             maxTokens: parameters.maxTokens ?? this.maxTokens,
             temperature: parameters.temperature ?? this.temperature,
-            onToken: async (token) => {
-                tokenEmitter.emit('token', token);
-            }
+            onTextChunk: (text) => {
+                textEmitter.emit('text', text);
+            },
         }).then(() => {
-            tokenEmitter.emit('token', undefined);
+            textEmitter.emit('text', undefined);
         }).catch(e => { });
         while (true) {
-            const token = await new Promise((resolve) => tokenEmitter.once('token', resolve));
-            if (token === undefined) {
+            const text = await new Promise((resolve) => textEmitter.once('text', resolve));
+            if (text === undefined) {
                 break;
             }
-            const output = model.detokenize(token);
-            if (output.indexOf('<|end|>') !== -1) {
-                break;
-            }
-            outputTokens += token.length;
+            outputTokens += model.tokenize(text).length;
             yield {
-                output,
+                output: text,
                 inputTokens,
                 outputTokens,
             };
         }
         session.dispose();
-        await context.dispose();
     }
     async getPrompt(parameters, model) {
         const { prompt, instructions, history } = parameters;
