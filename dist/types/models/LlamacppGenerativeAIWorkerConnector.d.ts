@@ -26,16 +26,6 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private workflowId?;
     /**
-     * The context.
-     * @ignore
-     */
-    private context?;
-    /**
-     * The embedding context.
-     * @ignore
-     */
-    private embeddingContext?;
-    /**
      * The Llama engine.
      * @ignore
      */
@@ -45,6 +35,16 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @ignore
      */
     private static models;
+    /**
+     * The context.
+     * @ignore
+     */
+    private static context?;
+    /**
+     * The embedding context.
+     * @ignore
+     */
+    private static embeddingContext?;
     /**
      * The constructor.
      * @param options The options.
@@ -56,6 +56,26 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @ignore
      */
     private static getEngine;
+    /**
+     * Get a model.
+     * @param id The model ID.
+     * @returns The model.
+     * @ignore
+     */
+    private static getModel;
+    /**
+     * Set a model.
+     * @param id The model ID.
+     * @param model The model.
+     * @ignore
+     */
+    private static setModel;
+    /**
+     * Delete a model.
+     * @param id The model ID.
+     * @ignore
+     */
+    private static deleteModel;
     /**
      * Initialize the machine learning model.
      * @param workflowId The workflow ID.
