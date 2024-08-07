@@ -1,11 +1,12 @@
 {
   "name": "@crewdle/mist-connector-llamacpp",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/types/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "rm -r ./dist && tsc",
+    "copy-sdk-types": "cp -r ../web-sdk-types/dist ./node_modules/@crewdle/web-sdk-types"
   },
   "type": "module",
   "repository": {
@@ -23,10 +24,10 @@
     "dist/"
   ],
   "dependencies": {
-    "node-llama-cpp": "^3.0.0-beta.32"
+    "node-llama-cpp": "3.0.0-beta.41"
   },
   "devDependencies": {
-    "@crewdle/web-sdk-types": "^1.0.16",
+    "@crewdle/web-sdk-types": "^1.0.18",
     "@types/async-retry": "^1.4.8",
     "@types/node": "^20.14.9",
     "typescript": "^5.5.2"

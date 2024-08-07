@@ -1,15 +1,9 @@
 import { EventEmitter } from 'events';
-const CHUNK_MAX_LENGTH = 512;
 /**
  * The Llamacpp machine learning connector.
  */
 export class LlamacppGenerativeAIWorkerConnector {
     options;
-    /**
-     * The vector database connector.
-     * @ignore
-     */
-    vectorDatabase;
     /**
      * The instructions.
      * @ignore
@@ -26,273 +20,257 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     temperature = 1;
     /**
-     * The number of contents to include in the context.
+     * The workflow ID.
      * @ignore
      */
-    maxContents = 10;
-    /**
-     * The number of chunks to include in one content.
-     * @ignore
-     */
-    maxChunks = 2;
+    workflowId;
     /**
      * The Llama engine.
      * @ignore
      */
-    engine;
+    static engine;
     /**
-     * The model to use for language modeling.
+     * The models.
      * @ignore
      */
-    llmModel;
+    static models = new Map();
     /**
-     * The model to use for sentence similarity.
+     * The context.
      * @ignore
      */
-    similarityModel;
-    /**
-     * The chunks of documents.
-     * @ignore
-     */
-    chunks = [];
-    /**
-     * The documents.
-     * @ignore
-     */
-    documents = [];
+    static context;
     /**
      * The embedding context.
      * @ignore
      */
-    embeddingContext;
-    /**
-     * The chat context.
-     * @ignore
-     */
-    chatContext;
-    /**
-     * The chat session.
-     * @ignore
-     */
-    chatSession;
+    static embeddingContext;
     /**
      * The constructor.
-     * @param vectorDatabaseConnector The vector database connector constructor.
      * @param options The options.
      */
-    constructor(vectorDatabaseConnector, options) {
+    constructor(options) {
         this.options = options;
-        this.vectorDatabase = new vectorDatabaseConnector();
-        if (options?.instructions) {
-            this.instructions = options.instructions;
+        if (this.options?.instructions) {
+            this.instructions = this.options.instructions;
         }
-        if (options?.maxTokens) {
-            this.maxTokens = options.maxTokens;
+        if (this.options?.maxTokens) {
+            this.maxTokens = this.options.maxTokens;
         }
-        if (options?.temperature) {
-            this.temperature = options.temperature;
-        }
-        if (options?.maxContents) {
-            this.maxContents = options.maxContents;
-        }
-        if (options?.maxChunks) {
-            this.maxChunks = options.maxChunks;
+        if (this.options?.temperature) {
+            this.temperature = this.options.temperature;
         }
     }
     /**
-     * Initialize the machine learning model.
-     * @param llmModel The path to the LLM model.
-     * @param similarityModel The path to the similarity model.
+     * Get the Llama engine.
+     * @returns A promise that resolves with the Llama engine.
+     * @ignore
      */
-    async initialize(llmModel, similarityModel) {
-        if (!llmModel && !this.options?.llmPath) {
-            throw new Error('LLM model path not provided');
-        }
-        if (!similarityModel && !this.options?.similarityPath) {
-            throw new Error('Similarity model path not provided');
+    static async getEngine() {
+        if (this.engine) {
+            return this.engine;
         }
         const { getLlama } = await import('node-llama-cpp');
         this.engine = await getLlama();
-        this.llmModel = await this.engine.loadModel({
-            modelPath: llmModel ?? this.options?.llmPath ?? 'llm.gguf',
-        });
-        this.similarityModel = await this.engine.loadModel({
-            modelPath: similarityModel ?? this.options?.similarityPath ?? 'similarity.gguf',
-        });
+        return this.engine;
     }
     /**
-     * Add content to the machine learning model.
-     * @param name The name of the content.
-     * @param content The content to add.
-     * @returns A promise that resolves when the content has been added.
+     * Get a model.
+     * @param id The model ID.
+     * @returns The model.
+     * @ignore
      */
-    async addContent(name, content) {
-        if (!this.similarityModel) {
-            throw new Error('Model not initialized');
+    static getModel(id) {
+        return this.models.get(id);
+    }
+    /**
+     * Set a model.
+     * @param id The model ID.
+     * @param model The model.
+     * @ignore
+     */
+    static setModel(id, model) {
+        this.models.set(id, model);
+    }
+    /**
+     * Delete a model.
+     * @param id The model ID.
+     * @ignore
+     */
+    static deleteModel(id) {
+        this.models.delete(id);
+    }
+    /**
+     * Initialize the machine learning model.
+     * @param workflowId The workflow ID.
+     * @param models The models to initialize.
+     */
+    async initialize(workflowId, models) {
+        const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+        for (const [modelName, modelPath] of models) {
+            let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
+            if (!model) {
+                const modelInstance = await engine.loadModel({
+                    modelPath,
+                });
+                model = {
+                    model: modelInstance,
+                    workflows: new Set(),
+                };
+            }
+            model.workflows.add(workflowId);
+            LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
+            this.workflowId = workflowId;
         }
-        const document = this.documents.find(document => document.name === name);
-        if (document) {
-            this.removeContent(name);
+    }
+    /**
+     * Close the machine learning model.
+     * @returns A promise that resolves when the model has been closed.
+     */
+    async close() {
+        if (!this.workflowId) {
+            return;
         }
-        this.embeddingContext = await this.similarityModel.createEmbeddingContext();
-        const embeddings = [];
-        try {
-            for (let j = 0; j < content.length; j += CHUNK_MAX_LENGTH) {
-                const embedding = await this.getVector(content.slice(j, j + CHUNK_MAX_LENGTH));
-                this.chunks.push(content.slice(j, j + CHUNK_MAX_LENGTH));
-                embeddings.push(embedding);
+        for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
+            model.workflows.delete(this.workflowId);
+            if (model.workflows.size === 0) {
+                if (LlamacppGenerativeAIWorkerConnector.context?.modelId === id) {
+                    await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
+                    LlamacppGenerativeAIWorkerConnector.context = undefined;
+                }
+                if (LlamacppGenerativeAIWorkerConnector.embeddingContext?.modelId === id) {
+                    await LlamacppGenerativeAIWorkerConnector.embeddingContext.instance.dispose();
+                    LlamacppGenerativeAIWorkerConnector.embeddingContext = undefined;
+                }
+                await model.model.dispose();
+                LlamacppGenerativeAIWorkerConnector.deleteModel(id);
+            }
+            else {
+                LlamacppGenerativeAIWorkerConnector.setModel(id, model);
             }
         }
-        catch (e) {
-            console.error(e);
-        }
-        if (embeddings.length > 0) {
-            this.documents.push({
-                name,
-                startIndex: this.chunks.length,
-                length: embeddings.length,
-            });
-            this.vectorDatabase.insert(embeddings);
-        }
-        await this.embeddingContext.dispose();
-        this.embeddingContext = undefined;
-    }
-    /**
-     * Remove content from the machine learning model.
-     * @param name The name of the content.
-     */
-    removeContent(name) {
-        const document = this.documents.find(document => document.name === name);
-        if (!document)
-            return;
-        this.vectorDatabase.remove(Array.from({ length: document.length }, (_, i) => document.startIndex + i));
-        this.chunks.splice(document.startIndex, document.length);
-        this.documents = this.documents.filter(doc => doc !== document);
     }
     /**
      * Process a job.
-     * @param job The job to process.
+     * @param parameters The job parameters.
      * @returns A promise that resolves with the job result.
      */
-    async processJob(job) {
-        if (!this.llmModel) {
+    async processJob(parameters, options) {
+        const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
+        if (!model) {
             throw new Error('Model not initialized');
         }
-        if (!this.chatContext) {
-            this.chatContext = await this.llmModel.createContext();
+        if (options.model.outputType === 'vector') {
+            if (!LlamacppGenerativeAIWorkerConnector.embeddingContext || LlamacppGenerativeAIWorkerConnector.embeddingContext.modelId !== options.model.id) {
+                if (LlamacppGenerativeAIWorkerConnector.embeddingContext) {
+                    await LlamacppGenerativeAIWorkerConnector.embeddingContext.instance.dispose();
+                }
+                const instance = await model.createEmbeddingContext();
+                LlamacppGenerativeAIWorkerConnector.embeddingContext = {
+                    modelId: options.model.id,
+                    instance,
+                };
+            }
+            const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext.instance, parameters.prompt);
+            return {
+                output: vector,
+            };
         }
-        if (!this.chatSession) {
-            const { LlamaChatSession } = await import('node-llama-cpp');
-            this.chatSession = new LlamaChatSession({
-                contextSequence: this.chatContext.getSequence(),
-            });
+        if (!LlamacppGenerativeAIWorkerConnector.context || LlamacppGenerativeAIWorkerConnector.context.modelId !== options.model.id) {
+            if (LlamacppGenerativeAIWorkerConnector.context) {
+                await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
+            }
+            const instance = await model.createContext();
+            LlamacppGenerativeAIWorkerConnector.context = {
+                modelId: options.model.id,
+                instance,
+            };
         }
-        const prompt = await this.getPrompt(job);
-        const output = await this.chatSession.prompt(prompt, {
-            maxTokens: job.parameters.maxTokens ?? this.maxTokens,
-            temperature: job.parameters.temperature ?? this.temperature,
+        const { LlamaChatSession } = await import('node-llama-cpp');
+        const session = new LlamaChatSession({
+            contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
         });
-        const inputTokens = this.llmModel.tokenize(prompt).length;
-        const outputTokens = this.llmModel.tokenize(output).length;
-        this.chatSession.dispose();
-        this.chatSession = undefined;
-        this.chatContext.dispose();
-        this.chatContext = undefined;
+        const prompt = await this.getPrompt(parameters, model);
+        const output = await session.prompt(prompt, {
+            maxTokens: parameters.maxTokens ?? this.maxTokens,
+            temperature: parameters.temperature ?? this.temperature,
+        });
+        const inputTokens = model.tokenize(prompt).length;
+        const outputTokens = model.tokenize(output).length;
+        session.dispose();
         return {
-            id: job.id,
-            status: 'completed',
-            result: {
-                output,
-                inputTokens,
-                outputTokens,
-                contentSize: this.chunks.length,
-            },
+            output,
+            inputTokens,
+            outputTokens,
         };
     }
     /**
      * Stream a job.
-     * @param job The job to stream.
+     * @param parameters The job parameters.
      * @returns An async generator that yields the responses.
      */
-    async *processJobStream(job) {
-        if (!this.llmModel) {
+    async *processJobStream(parameters, options) {
+        const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
+        if (!model) {
             throw new Error('Model not initialized');
         }
-        if (!this.chatContext) {
-            this.chatContext = await this.llmModel.createContext();
+        if (options.model.outputType === 'vector') {
+            throw new Error('Vector output type not supported for streaming');
         }
-        if (!this.chatSession) {
-            const { LlamaChatSession } = await import('node-llama-cpp');
-            this.chatSession = new LlamaChatSession({
-                contextSequence: this.chatContext.getSequence(),
-            });
-        }
-        const tokenEmitter = new EventEmitter();
-        const prompt = await this.getPrompt(job);
-        const inputTokens = this.llmModel.tokenize(prompt).length;
-        let outputTokens = 0;
-        this.chatSession.prompt(prompt, {
-            maxTokens: job.parameters.maxTokens ?? this.maxTokens,
-            temperature: job.parameters.temperature ?? this.temperature,
-            onToken: async (token) => {
-                tokenEmitter.emit('token', token);
+        if (!LlamacppGenerativeAIWorkerConnector.context || LlamacppGenerativeAIWorkerConnector.context.modelId !== options.model.id) {
+            if (LlamacppGenerativeAIWorkerConnector.context) {
+                await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
             }
-        }).then(() => {
-            tokenEmitter.emit('token', undefined);
-        }).catch(e => { });
-        while (true) {
-            const token = await new Promise((resolve) => tokenEmitter.once('token', resolve));
-            if (!token || this.llmModel.detokenize(token).indexOf('<|end|>') !== -1) {
-                break;
-            }
-            outputTokens += token.length;
-            yield {
-                id: job.id,
-                status: 'partial',
-                result: {
-                    output: this.llmModel.detokenize(token),
-                    inputTokens,
-                    outputTokens,
-                    contentSize: this.chunks.length,
-                },
+            const instance = await model.createContext();
+            LlamacppGenerativeAIWorkerConnector.context = {
+                modelId: options.model.id,
+                instance,
             };
         }
-        this.chatSession.dispose();
-        this.chatSession = undefined;
-        this.chatContext.dispose();
-        this.chatContext = undefined;
+        const { LlamaChatSession } = await import('node-llama-cpp');
+        const session = new LlamaChatSession({
+            contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
+        });
+        const prompt = await this.getPrompt(parameters, model);
+        const inputTokens = model.tokenize(prompt).length;
+        let outputTokens = 0;
+        const textEmitter = new EventEmitter();
+        session.prompt(prompt, {
+            maxTokens: parameters.maxTokens ?? this.maxTokens,
+            temperature: parameters.temperature ?? this.temperature,
+            onTextChunk: (text) => {
+                textEmitter.emit('text', text);
+            },
+        }).then(() => {
+            textEmitter.emit('text', undefined);
+        }).catch(e => { });
+        while (true) {
+            const text = await new Promise((resolve) => textEmitter.once('text', resolve));
+            if (text === undefined) {
+                break;
+            }
+            outputTokens += model.tokenize(text).length;
+            yield {
+                output: text,
+                inputTokens,
+                outputTokens,
+            };
+        }
+        session.dispose();
     }
-    async getPrompt(job) {
-        if (!this.llmModel) {
-            throw new Error('Model not initialized');
-        }
-        const { useRAG, prompt, instructions, history } = job.parameters;
+    async getPrompt(parameters, model) {
+        const { prompt, instructions, history } = parameters;
         let finalPrompt = `${instructions ?? this.instructions}\n\n`;
-        finalPrompt += `Relevant Information:\n\n`;
-        if (useRAG === undefined || useRAG === true) {
-            let ragContext = '';
-            ragContext = await this.getContext(prompt, job.parameters);
-            if (ragContext !== '') {
-                finalPrompt += `${ragContext}\n\n`;
-            }
-            else {
-                finalPrompt += `No relevant information found.\n\n`;
-            }
-        }
-        else {
-            finalPrompt += `No relevant information used.\n\n`;
-        }
         finalPrompt += `Conversation:\n`;
         if (history) {
             let conversation = '';
-            let conversationLength = this.llmModel.tokenize(finalPrompt).length + this.llmModel.tokenize(`Human: ${prompt}\nAI:`).length;
+            let conversationLength = model.tokenize(finalPrompt).length + model.tokenize(`Human: ${prompt}\nAI:`).length;
             for (let i = history.length - 1; i >= 0; i--) {
                 const { source, message } = history[i];
-                if (conversationLength + this.llmModel.tokenize(message).length > this.llmModel.trainContextSize * 0.75) {
+                if (conversationLength + model.tokenize(message).length > model.trainContextSize * 0.75) {
                     break;
                 }
                 conversation = `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n${conversation}`;
-                conversationLength += this.llmModel.tokenize(`${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`).length;
+                conversationLength += model.tokenize(`${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`).length;
             }
             finalPrompt += conversation;
         }
@@ -300,41 +278,14 @@ export class LlamacppGenerativeAIWorkerConnector {
         return finalPrompt;
     }
     /**
-     * Get the context for a prompt.
-     * @param prompt The prompt.
-     * @returns A promise that resolves to the context.
-     * @ignore
-     */
-    async getContext(prompt, options) {
-        if (!this.similarityModel) {
-            throw new Error('Model not initialized');
-        }
-        this.embeddingContext = await this.similarityModel.createEmbeddingContext();
-        const embedding = await this.getVector(prompt);
-        const maxChunks = options?.maxChunks ?? this.maxChunks;
-        const context = this.vectorDatabase.search(embedding, options?.maxContents ?? this.maxContents, options?.minRelevance, options?.ragStartingIndex).map(index => {
-            let context = '';
-            const document = this.documents.find(document => document.startIndex <= index && index < document.startIndex + document.length);
-            if (document) {
-                context += `From ${document.name}:\n`;
-            }
-            context += this.chunks.slice(index - (maxChunks / 2 - 1), index + (maxChunks / 2)).join(' ');
-            return context;
-        });
-        await this.embeddingContext.dispose();
-        return context.join("\n");
-    }
-    /**
      * Get the vector for some content.
+     * @param embeddingContext The embedding context.
      * @param content The content.
-     * @returns A promise that resolves to the embedding.
+     * @returns A promise that resolves to the vector.
      * @ignore
      */
-    async getVector(content) {
-        if (!this.embeddingContext) {
-            throw new Error('Embedding context not initialized');
-        }
-        const vector = (await this.embeddingContext.getEmbeddingFor(this.cleanText(content))).vector;
+    async getVector(embeddingContext, content) {
+        const vector = (await embeddingContext.getEmbeddingFor(this.cleanText(content))).vector;
         return this.normalizeVector(vector);
     }
     /**
