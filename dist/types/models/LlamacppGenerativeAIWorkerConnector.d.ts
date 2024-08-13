@@ -51,6 +51,14 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     constructor(options?: ILlamacppGenerativeAIWorkerOptions | undefined);
     /**
+     * Get the VRAM state.
+     * @returns The total and available VRAM.
+     */
+    static getVramState(): Promise<{
+        total: number;
+        available: number;
+    }>;
+    /**
      * Get the Llama engine.
      * @returns A promise that resolves with the Llama engine.
      * @ignore

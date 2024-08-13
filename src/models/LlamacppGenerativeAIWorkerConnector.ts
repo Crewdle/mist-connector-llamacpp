@@ -84,6 +84,19 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   }
 
   /**
+   * Get the VRAM state.
+   * @returns The total and available VRAM.
+   */
+  static async getVramState(): Promise<{ total: number, available: number }> {
+    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+    const vramState = await engine.getVramState();
+    return {
+      total: vramState.total,
+      available: vramState.free,
+    };
+  }
+
+  /**
    * Get the Llama engine.
    * @returns A promise that resolves with the Llama engine.
    * @ignore
