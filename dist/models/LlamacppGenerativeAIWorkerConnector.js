@@ -164,6 +164,9 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
         }
     }
+    getEngineType() {
+        return 'llamacpp';
+    }
     /**
      * Process a job.
      * @param parameters The job parameters.

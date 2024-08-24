@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession } from 'node-llama-cpp';
 
-import type { GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
+import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
@@ -192,6 +192,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         LlamacppGenerativeAIWorkerConnector.setModel(id, model);
       }
     }
+  }
+
+  getEngineType(): GenerativeAIEngineType {
+    return 'llamacpp' as GenerativeAIEngineType;
   }
 
   /**

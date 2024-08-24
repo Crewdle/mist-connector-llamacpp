@@ -1,4 +1,4 @@
-import type { IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
+import type { GenerativeAIEngineType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 /**
  * The Llamacpp machine learning connector.
@@ -95,6 +95,7 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @returns A promise that resolves when the model has been closed.
      */
     close(): Promise<void>;
+    getEngineType(): GenerativeAIEngineType;
     /**
      * Process a job.
      * @param parameters The job parameters.
