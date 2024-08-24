@@ -107,7 +107,7 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @returns An async generator that yields the responses.
      */
     processJobStream(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): AsyncGenerator<IJobResultAI>;
-    private getPrompt;
+    private setupSession;
     /**
      * Get the vector for some content.
      * @param embeddingContext The embedding context.

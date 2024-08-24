@@ -197,14 +197,24 @@ export class LlamacppGenerativeAIWorkerConnector {
                 instance,
             };
         }
-        const { LlamaChatSession } = await import('node-llama-cpp');
+        const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
             contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
         });
-        const prompt = await this.getPrompt(parameters, model);
+        const { prompt } = parameters;
+        this.setupSession(session, parameters);
+        const functions = {
+            getDate: defineChatSessionFunction({
+                description: "Retrieve the current date",
+                handler() {
+                    return new Date().toLocaleDateString();
+                }
+            }),
+        };
         const output = await session.prompt(prompt, {
             maxTokens: parameters.maxTokens ?? this.maxTokens,
             temperature: parameters.temperature ?? this.temperature,
+            functions,
         });
         const inputTokens = model.tokenize(prompt).length;
         const outputTokens = model.tokenize(output).length;
@@ -238,17 +248,27 @@ export class LlamacppGenerativeAIWorkerConnector {
                 instance,
             };
         }
-        const { LlamaChatSession } = await import('node-llama-cpp');
+        const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
             contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
         });
-        const prompt = await this.getPrompt(parameters, model);
+        const { prompt } = parameters;
+        this.setupSession(session, parameters);
+        const functions = {
+            getDate: defineChatSessionFunction({
+                description: "Retrieve the current date",
+                handler() {
+                    return new Date().toLocaleDateString();
+                }
+            }),
+        };
         const inputTokens = model.tokenize(prompt).length;
         let outputTokens = 0;
         const textEmitter = new EventEmitter();
         session.prompt(prompt, {
             maxTokens: parameters.maxTokens ?? this.maxTokens,
             temperature: parameters.temperature ?? this.temperature,
+            functions,
             onTextChunk: (text) => {
                 textEmitter.emit('text', text);
             },
@@ -269,25 +289,29 @@ export class LlamacppGenerativeAIWorkerConnector {
         }
         session.dispose();
     }
-    async getPrompt(parameters, model) {
-        const { prompt, instructions, history } = parameters;
-        let finalPrompt = `${instructions ?? this.instructions}\n\n`;
-        finalPrompt += `Conversation:\n`;
+    setupSession(session, parameters) {
+        const { instructions, history } = parameters;
+        const chatHistory = [{
+                type: 'system',
+                text: `${instructions ?? this.instructions}`,
+            }];
         if (history) {
-            let conversation = '';
-            let conversationLength = model.tokenize(finalPrompt).length + model.tokenize(`Human: ${prompt}\nAI:`).length;
-            for (let i = history.length - 1; i >= 0; i--) {
-                const { source, message } = history[i];
-                if (conversationLength + model.tokenize(message).length > model.trainContextSize * 0.75) {
-                    break;
+            for (const item of history) {
+                if (item.source === 'ai') {
+                    chatHistory.push({
+                        type: 'model',
+                        response: [item.message],
+                    });
                 }
-                conversation = `${source === 'ai' ? 'AI' : 'Human'}: ${message}\n${conversation}`;
-                conversationLength += model.tokenize(`${source === 'ai' ? 'AI' : 'Human'}: ${message}\n`).length;
+                if (item.source === 'human') {
+                    chatHistory.push({
+                        type: 'user',
+                        text: item.message,
+                    });
+                }
             }
-            finalPrompt += conversation;
         }
-        finalPrompt += `Human: ${prompt}\nAI:`;
-        return finalPrompt;
+        session.setChatHistory(chatHistory);
     }
     /**
      * Get the vector for some content.
