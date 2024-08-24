@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession } from 'node-llama-cpp';
 
-import type { GenerativeAIModelOutputType, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
+import type { GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
@@ -145,13 +145,16 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param workflowId The workflow ID.
    * @param models The models to initialize.
    */
-  async initialize(workflowId: string, models: Map<string, string>): Promise<void> {
+  async initialize(workflowId: string, models: Map<string, IGenerativeAIModel>): Promise<void> {
     const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
-    for (const [modelName, modelPath] of models) {
+    for (const [modelName, modelObj] of models) {
+      if (modelObj.engineType !== 'llamacpp' || !modelObj.pathName) {
+        continue;
+      }
       let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
       if (!model) {
         const modelInstance = await engine.loadModel({
-          modelPath,
+          modelPath: modelObj.pathName,
         });
         model = {
           model: modelInstance,

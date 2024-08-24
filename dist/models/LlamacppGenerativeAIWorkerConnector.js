@@ -118,11 +118,14 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     async initialize(workflowId, models) {
         const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
-        for (const [modelName, modelPath] of models) {
+        for (const [modelName, modelObj] of models) {
+            if (modelObj.engineType !== 'llamacpp' || !modelObj.pathName) {
+                continue;
+            }
             let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
             if (!model) {
                 const modelInstance = await engine.loadModel({
-                    modelPath,
+                    modelPath: modelObj.pathName,
                 });
                 model = {
                     model: modelInstance,
