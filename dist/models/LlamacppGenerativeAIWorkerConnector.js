@@ -207,20 +207,39 @@ export class LlamacppGenerativeAIWorkerConnector {
         const session = new LlamaChatSession({
             contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
         });
-        const { prompt } = parameters;
+        const { prompt, functions } = parameters;
         this.setupSession(session, parameters);
-        const functions = {
-            getDate: defineChatSessionFunction({
-                description: "Retrieve the current date",
-                handler() {
-                    return new Date().toLocaleDateString();
+        let functionsObj = {};
+        if (functions) {
+            Array.from(functions?.entries()).map(([name, func]) => {
+                if (func.params) {
+                    functionsObj[name] = defineChatSessionFunction({
+                        description: func.description,
+                        params: {
+                            type: 'object',
+                            properties: {
+                                ...func.params,
+                            }
+                        },
+                        handler(params) {
+                            return func.callback(params);
+                        },
+                    });
                 }
-            }),
-        };
+                else {
+                    functionsObj[name] = defineChatSessionFunction({
+                        description: func.description,
+                        handler() {
+                            return func.callback();
+                        }
+                    });
+                }
+            });
+        }
         const output = await session.prompt(prompt, {
             maxTokens: parameters.maxTokens ?? this.maxTokens,
             temperature: parameters.temperature ?? this.temperature,
-            functions,
+            functions: functionsObj,
         });
         const inputTokens = model.tokenize(prompt).length;
         const outputTokens = model.tokenize(output).length;
@@ -258,23 +277,42 @@ export class LlamacppGenerativeAIWorkerConnector {
         const session = new LlamaChatSession({
             contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
         });
-        const { prompt } = parameters;
+        const { prompt, functions } = parameters;
         this.setupSession(session, parameters);
-        const functions = {
-            getDate: defineChatSessionFunction({
-                description: "Retrieve the current date",
-                handler() {
-                    return new Date().toLocaleDateString();
+        let functionsObj = {};
+        if (functions) {
+            Array.from(functions?.entries()).map(([name, func]) => {
+                if (func.params) {
+                    functionsObj[name] = defineChatSessionFunction({
+                        description: func.description,
+                        params: {
+                            type: 'object',
+                            properties: {
+                                ...func.params,
+                            }
+                        },
+                        handler(params) {
+                            return func.callback(params);
+                        },
+                    });
                 }
-            }),
-        };
+                else {
+                    functionsObj[name] = defineChatSessionFunction({
+                        description: func.description,
+                        handler() {
+                            return func.callback();
+                        }
+                    });
+                }
+            });
+        }
         const inputTokens = model.tokenize(prompt).length;
         let outputTokens = 0;
         const textEmitter = new EventEmitter();
         session.prompt(prompt, {
             maxTokens: parameters.maxTokens ?? this.maxTokens,
             temperature: parameters.temperature ?? this.temperature,
-            functions,
+            functions: functionsObj,
             onTextChunk: (text) => {
                 textEmitter.emit('text', text);
             },
