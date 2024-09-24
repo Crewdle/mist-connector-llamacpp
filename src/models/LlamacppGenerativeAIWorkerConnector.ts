@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession } from 'node-llama-cpp';
 
-import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
+import { AIJobType, type GenerativeAIEngineType, type GenerativeAIModelOutputType, type IGenerativeAIModel, type IGenerativeAIWorkerConnector, type IGenerativeAIWorkerOptions, type IJobParametersAI, type IJobPromptAIParameters, type IJobResultAI, type IPromptResult } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
@@ -203,7 +203,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param parameters The job parameters.
    * @returns A promise that resolves with the job result.
    */
-  async processJob(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): Promise<IJobResultAI> {
+  async processJob(parameters: IJobPromptAIParameters, options: IGenerativeAIWorkerOptions): Promise<IPromptResult> {
     const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
     if (!model) {
       throw new Error('Model not initialized');
@@ -222,10 +222,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       }
       const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext.instance, parameters.prompt);
       return {
+        type: AIJobType.Prompt,
         output: vector,
       };
     }
-    
+
     if (!LlamacppGenerativeAIWorkerConnector.context || LlamacppGenerativeAIWorkerConnector.context.modelId !== options.model.id) {
       if (LlamacppGenerativeAIWorkerConnector.context) {
         await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
@@ -241,7 +242,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
     });
 
-    
+
     const { prompt, functions } = parameters;
     this.setupSession(session, parameters);
     let functionsObj: {[key: string]: any} = {}
@@ -279,10 +280,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     const inputTokens = model.tokenize(prompt).length;
     const outputTokens = model.tokenize(output).length;
-    
+
     session.dispose();
 
     return {
+      type: AIJobType.Prompt,
       output,
       inputTokens,
       outputTokens,
@@ -294,7 +296,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param parameters The job parameters.
    * @returns An async generator that yields the responses.
    */
-  async *processJobStream(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): AsyncGenerator<IJobResultAI> {
+  async *processJobStream(parameters: IJobPromptAIParameters, options: IGenerativeAIWorkerOptions): AsyncGenerator<IPromptResult> {
     const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
     if (!model) {
       throw new Error('Model not initialized');
@@ -303,7 +305,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (options.model.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
       throw new Error('Vector output type not supported for streaming');
     }
-    
+
     if (!LlamacppGenerativeAIWorkerConnector.context || LlamacppGenerativeAIWorkerConnector.context.modelId !== options.model.id) {
       if (LlamacppGenerativeAIWorkerConnector.context) {
         await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
@@ -373,6 +375,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
       outputTokens += model.tokenize(text).length;
       yield {
+        type: AIJobType.Prompt,
         output: text,
         inputTokens,
         outputTokens,
