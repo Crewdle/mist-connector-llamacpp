@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession } from 'node-llama-cpp';
 
-import { AIJobType, type GenerativeAIEngineType, type GenerativeAIModelOutputType, type IGenerativeAIModel, type IGenerativeAIWorkerConnector, type IGenerativeAIWorkerOptions, type IJobParametersAI, type IGenAIPromptParameters, type IGenAIPromptResult } from '@crewdle/web-sdk-types';
+import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult, GenerativeAIWorkerConnectorTypes } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
@@ -203,7 +203,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param parameters The job parameters.
    * @returns A promise that resolves with the job result.
    */
-  async processJob(parameters: IGenAIPromptParameters, options: IGenerativeAIWorkerOptions): Promise<IGenAIPromptResult> {
+  async processJob(parameters: GenerativeAIWorkerConnectorParameters, options: IGenerativeAIWorkerOptions): Promise<GenerativeAIWorkerConnectorResult> {
     const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
     if (!model) {
       throw new Error('Model not initialized');
@@ -222,7 +222,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       }
       const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext.instance, parameters.prompt);
       return {
-        type: AIJobType.Prompt,
+        type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: vector,
       };
     }
@@ -284,7 +284,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     session.dispose();
 
     return {
-      type: AIJobType.Prompt,
+      type: 'prompt' as GenerativeAIWorkerConnectorTypes,
       output,
       inputTokens,
       outputTokens,
@@ -296,7 +296,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param parameters The job parameters.
    * @returns An async generator that yields the responses.
    */
-  async *processJobStream(parameters: IGenAIPromptParameters, options: IGenerativeAIWorkerOptions): AsyncGenerator<IGenAIPromptResult> {
+  async *processJobStream(parameters: IGenerativeAIPromptWorkerConnectorParameters, options: IGenerativeAIWorkerOptions): AsyncGenerator<IGenerativeAIWorkerConnectorPromptResult> {
     const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
     if (!model) {
       throw new Error('Model not initialized');
@@ -375,7 +375,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
       outputTokens += model.tokenize(text).length;
       yield {
-        type: AIJobType.Prompt,
+        type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: text,
         inputTokens,
         outputTokens,
@@ -385,7 +385,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     session.dispose();
   }
 
-  private setupSession(session: LlamaChatSession, parameters: IJobParametersAI): void {
+  private setupSession(session: LlamaChatSession, parameters: GenerativeAIWorkerConnectorParameters): void {
     const { instructions, history } = parameters;
 
     const chatHistory: ChatHistoryItem[] = [{

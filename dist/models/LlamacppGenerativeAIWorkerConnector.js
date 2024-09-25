@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { AIJobType } from '@crewdle/web-sdk-types';
 /**
  * The Llamacpp machine learning connector.
  */
@@ -191,7 +190,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
             const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext.instance, parameters.prompt);
             return {
-                type: AIJobType.Prompt,
+                type: 'prompt',
                 output: vector,
             };
         }
@@ -247,7 +246,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         const outputTokens = model.tokenize(output).length;
         session.dispose();
         return {
-            type: AIJobType.Prompt,
+            type: 'prompt',
             output,
             inputTokens,
             outputTokens,
@@ -329,7 +328,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
             outputTokens += model.tokenize(text).length;
             yield {
-                type: AIJobType.Prompt,
+                type: 'rating',
                 output: text,
                 inputTokens,
                 outputTokens,
