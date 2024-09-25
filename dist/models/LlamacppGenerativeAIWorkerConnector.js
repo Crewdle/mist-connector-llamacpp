@@ -328,7 +328,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
             outputTokens += model.tokenize(text).length;
             yield {
-                type: 'rating',
+                type: 'prompt',
                 output: text,
                 inputTokens,
                 outputTokens,
