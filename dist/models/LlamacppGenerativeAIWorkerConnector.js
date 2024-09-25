@@ -190,6 +190,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
             const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext.instance, parameters.prompt);
             return {
+                type: 'prompt',
                 output: vector,
             };
         }
@@ -245,6 +246,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         const outputTokens = model.tokenize(output).length;
         session.dispose();
         return {
+            type: 'prompt',
             output,
             inputTokens,
             outputTokens,
@@ -326,6 +328,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
             outputTokens += model.tokenize(text).length;
             yield {
+                type: 'prompt',
                 output: text,
                 inputTokens,
                 outputTokens,

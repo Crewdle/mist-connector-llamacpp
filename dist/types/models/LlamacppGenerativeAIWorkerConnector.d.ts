@@ -1,4 +1,4 @@
-import type { GenerativeAIEngineType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, IJobParametersAI, IJobResultAI } from '@crewdle/web-sdk-types';
+import type { GenerativeAIEngineType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult } from '@crewdle/web-sdk-types';
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 /**
  * The Llamacpp machine learning connector.
@@ -101,13 +101,13 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @param parameters The job parameters.
      * @returns A promise that resolves with the job result.
      */
-    processJob(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): Promise<IJobResultAI>;
+    processJob(parameters: GenerativeAIWorkerConnectorParameters, options: IGenerativeAIWorkerOptions): Promise<GenerativeAIWorkerConnectorResult>;
     /**
      * Stream a job.
      * @param parameters The job parameters.
      * @returns An async generator that yields the responses.
      */
-    processJobStream(parameters: IJobParametersAI, options: IGenerativeAIWorkerOptions): AsyncGenerator<IJobResultAI>;
+    processJobStream(parameters: IGenerativeAIPromptWorkerConnectorParameters, options: IGenerativeAIWorkerOptions): AsyncGenerator<IGenerativeAIWorkerConnectorPromptResult>;
     private setupSession;
     /**
      * Get the vector for some content.
