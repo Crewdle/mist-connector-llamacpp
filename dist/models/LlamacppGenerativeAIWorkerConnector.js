@@ -199,14 +199,16 @@ export class LlamacppGenerativeAIWorkerConnector {
                 await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
             }
             const instance = await model.createContext();
+            const sequence = instance.getSequence();
             LlamacppGenerativeAIWorkerConnector.context = {
                 modelId: options.model.id,
                 instance,
+                sequence,
             };
         }
         const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
-            contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
+            contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
         });
         const { prompt, functions } = parameters;
         this.setupSession(session, parameters);
@@ -270,14 +272,16 @@ export class LlamacppGenerativeAIWorkerConnector {
                 await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
             }
             const instance = await model.createContext();
+            const sequence = instance.getSequence();
             LlamacppGenerativeAIWorkerConnector.context = {
                 modelId: options.model.id,
                 instance,
+                sequence,
             };
         }
         const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
         const session = new LlamaChatSession({
-            contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
+            contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
         });
         const { prompt, functions } = parameters;
         this.setupSession(session, parameters);
