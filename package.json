@@ -1,6 +1,6 @@
 {
   "name": "@crewdle/mist-connector-llamacpp",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/types/index.d.ts",
@@ -24,7 +24,7 @@
     "dist/"
   ],
   "dependencies": {
-    "node-llama-cpp": "^3.1.0"
+    "node-llama-cpp": "^3.1.1"
   },
   "devDependencies": {
     "@crewdle/web-sdk-types": "^1.0.23",

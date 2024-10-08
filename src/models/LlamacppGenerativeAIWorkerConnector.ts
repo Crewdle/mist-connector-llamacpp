@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession } from 'node-llama-cpp';
+import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession, LlamaContextSequence } from 'node-llama-cpp';
 
 import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult, GenerativeAIWorkerConnectorTypes } from '@crewdle/web-sdk-types';
 
@@ -54,6 +54,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private static context?: {
     modelId: string;
     instance: LlamaContext;
+    sequence: LlamaContextSequence;
   }
 
   /**
@@ -232,14 +233,16 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
       }
       const instance = await model.createContext();
+      const sequence = instance.getSequence();
       LlamacppGenerativeAIWorkerConnector.context = {
         modelId: options.model.id,
         instance,
+        sequence,
       };
     }
     const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
-      contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
+      contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
     });
 
 
@@ -311,14 +314,16 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
       }
       const instance = await model.createContext();
+      const sequence = instance.getSequence();
       LlamacppGenerativeAIWorkerConnector.context = {
         modelId: options.model.id,
         instance,
+        sequence,
       };
     }
     const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
-      contextSequence: LlamacppGenerativeAIWorkerConnector.context.instance.getSequence(),
+      contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
     });
 
     const { prompt, functions } = parameters;
