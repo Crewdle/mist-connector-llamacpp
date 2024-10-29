@@ -131,4 +131,10 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @ignore
      */
     private normalizeVector;
+    /**
+     * Get the functions object.
+     * @param functions The functions to process
+     * @returns A promise that resolves to the functions object
+     */
+    private getFunctions;
 }
