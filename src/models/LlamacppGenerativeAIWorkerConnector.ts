@@ -245,6 +245,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
     });
 
+    const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
+    const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
+
     const { prompt, functions, grammar, maxTokens, temperature } = parameters;
     this.setupSession(session, parameters);
 
@@ -266,16 +269,13 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       ...promptOptions,
     });
 
-    const inputTokens = model.tokenize(prompt).length;
-    const outputTokens = model.tokenize(output).length;
-
     session.dispose();
 
     return {
       type: 'prompt' as GenerativeAIWorkerConnectorTypes,
       output,
-      inputTokens,
-      outputTokens,
+      inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
+      outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
     };
   }
 
@@ -311,6 +311,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
     });
 
+    const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
+    const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
+
     const { prompt, functions, grammar, maxTokens, temperature } = parameters;
     this.setupSession(session, parameters);
 
@@ -325,9 +328,6 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       promptOptions.functions = undefined;
       promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
     }
-
-    const inputTokens = model.tokenize(prompt).length;
-    let outputTokens = 0;
 
     const textEmitter = new EventEmitter();
 
@@ -349,12 +349,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         break;
       }
 
-      outputTokens += model.tokenize(text).length;
       yield {
         type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: text,
-        inputTokens,
-        outputTokens,
+        inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
+        outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
       };
     }
 

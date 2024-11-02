@@ -210,6 +210,8 @@ export class LlamacppGenerativeAIWorkerConnector {
         const session = new LlamaChatSession({
             contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
         });
+        const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
+        const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
         const { prompt, functions, grammar, maxTokens, temperature } = parameters;
         this.setupSession(session, parameters);
         let promptOptions = {
@@ -225,14 +227,12 @@ export class LlamacppGenerativeAIWorkerConnector {
             temperature: temperature ?? this.temperature,
             ...promptOptions,
         });
-        const inputTokens = model.tokenize(prompt).length;
-        const outputTokens = model.tokenize(output).length;
         session.dispose();
         return {
             type: 'prompt',
             output,
-            inputTokens,
-            outputTokens,
+            inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
+            outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
         };
     }
     /**
@@ -264,6 +264,8 @@ export class LlamacppGenerativeAIWorkerConnector {
         const session = new LlamaChatSession({
             contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
         });
+        const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
+        const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
         const { prompt, functions, grammar, maxTokens, temperature } = parameters;
         this.setupSession(session, parameters);
         let promptOptions = {
@@ -274,8 +276,6 @@ export class LlamacppGenerativeAIWorkerConnector {
             promptOptions.functions = undefined;
             promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
         }
-        const inputTokens = model.tokenize(prompt).length;
-        let outputTokens = 0;
         const textEmitter = new EventEmitter();
         session.prompt(prompt, {
             maxTokens: maxTokens ?? this.maxTokens,
@@ -292,12 +292,11 @@ export class LlamacppGenerativeAIWorkerConnector {
             if (text === undefined) {
                 break;
             }
-            outputTokens += model.tokenize(text).length;
             yield {
                 type: 'prompt',
                 output: text,
-                inputTokens,
-                outputTokens,
+                inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
+                outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
             };
         }
         session.dispose();
