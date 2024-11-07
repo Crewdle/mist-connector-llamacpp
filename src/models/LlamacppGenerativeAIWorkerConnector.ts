@@ -258,9 +258,15 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       functions: functions ? await this.getFunctions(functions) : undefined,
       grammar: undefined,
     }
-    if (grammar && grammar === 'json') {
-      promptOptions.functions = undefined;
-      promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+    if (grammar) {
+      if (grammar === 'json' || grammar === 'json_arr') {
+        promptOptions.functions = undefined;
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+      } else if (grammar !== 'default') {
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
+          grammar,
+        });
+      }
     }
 
     const output = await session.prompt(prompt, {
@@ -324,9 +330,15 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       functions: functions ? await this.getFunctions(functions) : undefined,
       grammar: undefined,
     }
-    if (grammar && grammar === 'json') {
-      promptOptions.functions = undefined;
-      promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+    if (grammar) {
+      if (grammar === 'json' || grammar === 'json_arr') {
+        promptOptions.functions = undefined;
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+      } else if (grammar !== 'default') {
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
+          grammar,
+        });
+      }
     }
 
     const textEmitter = new EventEmitter();
