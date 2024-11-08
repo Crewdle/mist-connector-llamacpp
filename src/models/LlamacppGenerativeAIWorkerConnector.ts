@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 
 import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession, LlamaContextSequence } from 'node-llama-cpp';
 
-import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult, GenerativeAIWorkerConnectorTypes } from '@crewdle/web-sdk-types';
+import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult, GenerativeAIWorkerConnectorTypes, IPromptFunction } from '@crewdle/web-sdk-types';
 
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
 import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
@@ -240,57 +240,48 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         sequence,
       };
     }
-    const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
+    const { LlamaChatSession } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
       contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
     });
 
+    const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
+    const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
 
-    const { prompt, functions } = parameters;
+    const { prompt, functions, grammar, maxTokens, temperature } = parameters;
     this.setupSession(session, parameters);
-    let functionsObj: {[key: string]: any} = {}
-    if (functions) {
-      Array.from(functions?.entries()).map(([name, func]) => {
-        if (func.params) {
-          functionsObj[name] = defineChatSessionFunction({
-            description: func.description,
-            params: {
-              type: 'object',
-              properties: {
-                ...func.params,
-              }
-            },
-            handler(params) {
-              return func.callback(params);
-            },
-          });
-        } else {
-          functionsObj[name] = defineChatSessionFunction({
-            description: func.description,
-            handler() {
-              return func.callback();
-            }
-          });
-        }
-      });
+
+    let promptOptions: {
+      functions?: {[key: string]: any},
+      grammar?: any,
+    } = {
+      functions: functions ? await this.getFunctions(functions) : undefined,
+      grammar: undefined,
+    }
+    if (grammar) {
+      if (grammar === 'json' || grammar === 'json_arr') {
+        promptOptions.functions = undefined;
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+      } else if (grammar !== 'default') {
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
+          grammar,
+        });
+      }
     }
 
     const output = await session.prompt(prompt, {
-      maxTokens: parameters.maxTokens ?? this.maxTokens,
-      temperature: parameters.temperature ?? this.temperature,
-      functions: functionsObj,
+      maxTokens: maxTokens ?? this.maxTokens,
+      temperature: temperature ?? this.temperature,
+      ...promptOptions,
     });
-
-    const inputTokens = model.tokenize(prompt).length;
-    const outputTokens = model.tokenize(output).length;
 
     session.dispose();
 
     return {
       type: 'prompt' as GenerativeAIWorkerConnectorTypes,
       output,
-      inputTokens,
-      outputTokens,
+      inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
+      outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
     };
   }
 
@@ -321,49 +312,41 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         sequence,
       };
     }
-    const { LlamaChatSession, defineChatSessionFunction } = await import('node-llama-cpp');
+    const { LlamaChatSession } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
       contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
     });
 
-    const { prompt, functions } = parameters;
-    this.setupSession(session, parameters);
-    let functionsObj: {[key: string]: any} = {}
-    if (functions) {
-      Array.from(functions?.entries()).map(([name, func]) => {
-        if (func.params) {
-          functionsObj[name] = defineChatSessionFunction({
-            description: func.description,
-            params: {
-              type: 'object',
-              properties: {
-                ...func.params,
-              }
-            },
-            handler(params) {
-              return func.callback(params);
-            },
-          });
-        } else {
-          functionsObj[name] = defineChatSessionFunction({
-            description: func.description,
-            handler() {
-              return func.callback();
-            }
-          });
-        }
-      });
-    }
+    const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
+    const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
 
-    const inputTokens = model.tokenize(prompt).length;
-    let outputTokens = 0;
+    const { prompt, functions, grammar, maxTokens, temperature } = parameters;
+    this.setupSession(session, parameters);
+
+    let promptOptions: {
+      functions?: {[key: string]: any},
+      grammar?: any,
+    } = {
+      functions: functions ? await this.getFunctions(functions) : undefined,
+      grammar: undefined,
+    }
+    if (grammar) {
+      if (grammar === 'json' || grammar === 'json_arr') {
+        promptOptions.functions = undefined;
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+      } else if (grammar !== 'default') {
+        promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
+          grammar,
+        });
+      }
+    }
 
     const textEmitter = new EventEmitter();
 
     session.prompt(prompt, {
-      maxTokens: parameters.maxTokens ?? this.maxTokens,
-      temperature: parameters.temperature ?? this.temperature,
-      functions: functionsObj,
+      maxTokens: maxTokens ?? this.maxTokens,
+      temperature: temperature ?? this.temperature,
+      ...promptOptions,
       onTextChunk: (text) => {
         textEmitter.emit('text', text);
       },
@@ -378,12 +361,11 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         break;
       }
 
-      outputTokens += model.tokenize(text).length;
       yield {
         type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: text,
-        inputTokens,
-        outputTokens,
+        inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
+        outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
       };
     }
 
@@ -447,5 +429,44 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private normalizeVector(vector: readonly number[]): number[] {
     const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
     return vector.map((value) => value / norm);
+  }
+
+  /**
+   * Get the functions object.
+   * @param functions The functions to process
+   * @returns A promise that resolves to the functions object
+   */
+  private async getFunctions(functions: Map<string, IPromptFunction>): Promise<{[key: string]: any}> {
+    const { defineChatSessionFunction } = await import('node-llama-cpp');
+    let functionsObj: {[key: string]: any} = {}
+
+    Array.from(functions?.entries()).map(([name, func]) => {
+      if (!functionsObj) {
+        return;
+      }
+      if (func.params) {
+        functionsObj[name] = defineChatSessionFunction({
+          description: func.description,
+          params: {
+            type: 'object',
+            properties: {
+              ...func.params,
+            }
+          },
+          handler(params) {
+            return func.callback(params);
+          },
+        });
+      } else {
+        functionsObj[name] = defineChatSessionFunction({
+          description: func.description,
+          handler() {
+            return func.callback();
+          }
+        });
+      }
+    });
+
+    return functionsObj;
   }
 }
