@@ -1,3 +1,5 @@
+import { rmSync } from 'fs';
+
 import { EventEmitter } from 'events';
 
 import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession, LlamaContextSequence } from 'node-llama-cpp';
@@ -154,17 +156,36 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       }
       let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
       if (!model) {
-        const modelInstance = await engine.loadModel({
-          modelPath: modelObj.pathName,
-        });
-        model = {
-          model: modelInstance,
-          workflows: new Set(),
+        try {
+          if (modelObj.outputType !== 'text' as GenerativeAIModelOutputType.Text) {
+            const modelInstance = await engine.loadModel({
+              modelPath: modelObj.pathName,
+              useMlock: false,
+            });
+            model = {
+              model: modelInstance,
+              workflows: new Set(),
+            }
+          } else {
+            const modelInstance = await engine.loadModel({
+              modelPath: modelObj.pathName,
+              useMlock: false,
+              defaultContextFlashAttention: true,
+            });
+            model = {
+              model: modelInstance,
+              workflows: new Set(),
+            }
+          }
+
+          model.workflows.add(workflowId);
+          LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
+          this.workflowId = workflowId;
+        } catch (e) {
+          rmSync(modelObj.pathName);
+          throw e;
         }
       }
-      model.workflows.add(workflowId);
-      LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
-      this.workflowId = workflowId;
     }
   }
 

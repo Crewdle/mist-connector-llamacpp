@@ -1,3 +1,4 @@
+import { rmSync } from 'fs';
 import { EventEmitter } from 'events';
 /**
  * The Llamacpp machine learning connector.
@@ -124,17 +125,37 @@ export class LlamacppGenerativeAIWorkerConnector {
             }
             let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
             if (!model) {
-                const modelInstance = await engine.loadModel({
-                    modelPath: modelObj.pathName,
-                });
-                model = {
-                    model: modelInstance,
-                    workflows: new Set(),
-                };
+                try {
+                    if (modelObj.outputType !== 'text') {
+                        const modelInstance = await engine.loadModel({
+                            modelPath: modelObj.pathName,
+                            useMlock: false,
+                        });
+                        model = {
+                            model: modelInstance,
+                            workflows: new Set(),
+                        };
+                    }
+                    else {
+                        const modelInstance = await engine.loadModel({
+                            modelPath: modelObj.pathName,
+                            useMlock: false,
+                            defaultContextFlashAttention: true,
+                        });
+                        model = {
+                            model: modelInstance,
+                            workflows: new Set(),
+                        };
+                    }
+                    model.workflows.add(workflowId);
+                    LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
+                    this.workflowId = workflowId;
+                }
+                catch (e) {
+                    rmSync(modelObj.pathName);
+                    throw e;
+                }
             }
-            model.workflows.add(workflowId);
-            LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
-            this.workflowId = workflowId;
         }
     }
     /**
