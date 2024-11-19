@@ -152,9 +152,15 @@ export class LlamacppGenerativeAIWorkerConnector {
                     this.workflowId = workflowId;
                 }
                 catch (e) {
+                    console.error(e);
                     rmSync(modelObj.pathName);
                     throw e;
                 }
+            }
+            else {
+                model.workflows.add(workflowId);
+                LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
+                this.workflowId = workflowId;
             }
         }
     }
@@ -259,8 +265,8 @@ export class LlamacppGenerativeAIWorkerConnector {
         return {
             type: 'prompt',
             output,
-            inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
-            outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
+            inputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens - startingInputTokens,
+            outputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
         };
     }
     /**
@@ -330,8 +336,8 @@ export class LlamacppGenerativeAIWorkerConnector {
             yield {
                 type: 'prompt',
                 output: text,
-                inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
-                outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
+                inputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens - startingInputTokens,
+                outputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
             };
         }
         session.dispose();

@@ -182,9 +182,14 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
           LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
           this.workflowId = workflowId;
         } catch (e) {
+          console.error(e);
           rmSync(modelObj.pathName);
           throw e;
         }
+      } else {
+        model.workflows.add(workflowId);
+        LlamacppGenerativeAIWorkerConnector.setModel(modelName, model);
+        this.workflowId = workflowId;
       }
     }
   }
@@ -301,8 +306,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     return {
       type: 'prompt' as GenerativeAIWorkerConnectorTypes,
       output,
-      inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
-      outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
+      inputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens - startingInputTokens,
+      outputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
     };
   }
 
@@ -385,8 +390,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       yield {
         type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: text,
-        inputTokens: startingInputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens,
-        outputTokens: startingOutputTokens - LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens,
+        inputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens - startingInputTokens,
+        outputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
       };
     }
 
