@@ -335,6 +335,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         }).then(() => {
             textEmitter.emit('text', undefined);
         }).catch(e => {
+            console.error(e);
             textEmitter.emit('text', undefined);
         });
         while (true) {

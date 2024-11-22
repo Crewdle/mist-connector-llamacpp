@@ -388,6 +388,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     }).then(() => {
       textEmitter.emit('text', undefined);
     }).catch(e => {
+      console.error(e);
       textEmitter.emit('text', undefined);
     });
 
