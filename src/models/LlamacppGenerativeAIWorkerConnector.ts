@@ -56,7 +56,6 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private static context?: {
     modelId: string;
     instance: LlamaContext;
-    sequence: LlamaContextSequence;
   }
 
   /**
@@ -258,23 +257,26 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       if (LlamacppGenerativeAIWorkerConnector.context) {
         await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
       }
-      const instance = await model.createContext();
-      const sequence = instance.getSequence();
+      const instance = await model.createContext({
+        sequences: 3,
+      });
       LlamacppGenerativeAIWorkerConnector.context = {
         modelId: options.model.id,
         instance,
-        sequence,
       };
     }
+
+    const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
+    const sequence = LlamacppGenerativeAIWorkerConnector.context.instance.getSequence();
     const { LlamaChatSession } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
-      contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
+      contextSequence: sequence,
+      systemPrompt: instructions ?? this.instructions,
     });
 
-    const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
-    const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
+    const startingInputTokens = sequence.tokenMeter.usedInputTokens;
+    const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
 
-    const { prompt, functions, grammar, maxTokens, temperature } = parameters;
     this.setupSession(session, parameters);
 
     let promptOptions: {
@@ -301,13 +303,17 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       ...promptOptions,
     });
 
+    const inputTokens = sequence.tokenMeter.usedInputTokens - startingInputTokens;
+    const outputTokens = sequence.tokenMeter.usedOutputTokens - startingOutputTokens
+
     session.dispose();
+    sequence.dispose();
 
     return {
       type: 'prompt' as GenerativeAIWorkerConnectorTypes,
       output,
-      inputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens - startingInputTokens,
-      outputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
+      inputTokens,
+      outputTokens,
     };
   }
 
@@ -330,23 +336,26 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       if (LlamacppGenerativeAIWorkerConnector.context) {
         await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
       }
-      const instance = await model.createContext();
-      const sequence = instance.getSequence();
+      const instance = await model.createContext({
+        sequences: 3,
+      });
       LlamacppGenerativeAIWorkerConnector.context = {
         modelId: options.model.id,
         instance,
-        sequence,
       };
     }
+
+    const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
+    const sequence = LlamacppGenerativeAIWorkerConnector.context.instance.getSequence();
     const { LlamaChatSession } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
-      contextSequence: LlamacppGenerativeAIWorkerConnector.context.sequence,
+      contextSequence: sequence,
+      systemPrompt: instructions ?? this.instructions,
     });
 
-    const startingInputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens;
-    const startingOutputTokens = LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens;
+    const startingInputTokens = sequence.tokenMeter.usedInputTokens;
+    const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
 
-    const { prompt, functions, grammar, maxTokens, temperature } = parameters;
     this.setupSession(session, parameters);
 
     let promptOptions: {
@@ -378,7 +387,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       },
     }).then(() => {
       textEmitter.emit('text', undefined);
-    }).catch(e => {});
+    }).catch(e => {
+      console.error(e);
+      textEmitter.emit('text', undefined);
+    });
 
     while (true) {
       const text = await new Promise<string>((resolve) => textEmitter.once('text', resolve));
@@ -390,12 +402,13 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       yield {
         type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: text,
-        inputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedInputTokens - startingInputTokens,
-        outputTokens: LlamacppGenerativeAIWorkerConnector.context.sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
+        inputTokens: sequence.tokenMeter.usedInputTokens - startingInputTokens,
+        outputTokens: sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
       };
     }
 
     session.dispose();
+    sequence.dispose();
   }
 
   private setupSession(session: LlamaChatSession, parameters: GenerativeAIWorkerConnectorParameters): void {
@@ -403,7 +416,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     const chatHistory: ChatHistoryItem[] = [{
         type: 'system',
-        text: `${instructions ?? this.instructions}`,
+        text: instructions ?? this.instructions,
     }];
     if (history) {
       for (const item of history) {
