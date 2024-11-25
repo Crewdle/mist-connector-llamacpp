@@ -66,8 +66,13 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns The total and available VRAM.
      */
     static async getVramState() {
-        const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
-        const vramState = await engine.getVramState();
+        if (!LlamacppGenerativeAIWorkerConnector.engine) {
+            return {
+                total: 0,
+                available: 0,
+            };
+        }
+        const vramState = await LlamacppGenerativeAIWorkerConnector.engine.getVramState();
         return {
             total: vramState.total,
             available: vramState.free,
@@ -79,12 +84,15 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     static async getEngine() {
-        if (this.engine) {
-            return this.engine;
+        if (LlamacppGenerativeAIWorkerConnector.engine) {
+            console.log('Using existing Llama engine');
+            return LlamacppGenerativeAIWorkerConnector.engine;
         }
+        console.log('Loading Llama engine');
         const { getLlama } = await import('node-llama-cpp');
-        this.engine = await getLlama();
-        return this.engine;
+        LlamacppGenerativeAIWorkerConnector.engine = await getLlama();
+        console.log('Llama engine loaded');
+        return LlamacppGenerativeAIWorkerConnector.engine;
     }
     /**
      * Get a model.
@@ -93,7 +101,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     static getModel(id) {
-        return this.models.get(id);
+        return LlamacppGenerativeAIWorkerConnector.models.get(id);
     }
     /**
      * Set a model.
@@ -102,7 +110,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     static setModel(id, model) {
-        this.models.set(id, model);
+        LlamacppGenerativeAIWorkerConnector.models.set(id, model);
     }
     /**
      * Delete a model.
@@ -110,7 +118,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     static deleteModel(id) {
-        this.models.delete(id);
+        LlamacppGenerativeAIWorkerConnector.models.delete(id);
     }
     /**
      * Initialize the machine learning model.

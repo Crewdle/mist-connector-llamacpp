@@ -90,8 +90,14 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns The total and available VRAM.
    */
   static async getVramState(): Promise<{ total: number, available: number }> {
-    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
-    const vramState = await engine.getVramState();
+    if (!LlamacppGenerativeAIWorkerConnector.engine) {
+      return {
+        total: 0,
+        available: 0,
+      };
+    }
+
+    const vramState = await LlamacppGenerativeAIWorkerConnector.engine.getVramState();
     return {
       total: vramState.total,
       available: vramState.free,
@@ -104,13 +110,16 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private static async getEngine(): Promise<Llama> {
-    if (this.engine) {
-      return this.engine;
+    if (LlamacppGenerativeAIWorkerConnector.engine) {
+      console.log('Using existing Llama engine');
+      return LlamacppGenerativeAIWorkerConnector.engine;
     }
 
+    console.log('Loading Llama engine');
     const { getLlama } = await import('node-llama-cpp');
-    this.engine = await getLlama();
-    return this.engine;
+    LlamacppGenerativeAIWorkerConnector.engine = await getLlama();
+    console.log('Llama engine loaded');
+    return LlamacppGenerativeAIWorkerConnector.engine;
   }
 
   /**
@@ -120,7 +129,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private static getModel(id: string): ILlamacppGenerativeAIWorkerModel | undefined {
-    return this.models.get(id);
+    return LlamacppGenerativeAIWorkerConnector.models.get(id);
   }
 
   /**
@@ -130,7 +139,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private static setModel(id: string, model: ILlamacppGenerativeAIWorkerModel): void {
-    this.models.set(id, model);
+    LlamacppGenerativeAIWorkerConnector.models.set(id, model);
   }
 
   /**
@@ -139,7 +148,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private static deleteModel(id: string): void {
-    this.models.delete(id);
+    LlamacppGenerativeAIWorkerConnector.models.delete(id);
   }
 
   /**
