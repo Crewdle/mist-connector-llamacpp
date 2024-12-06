@@ -50,22 +50,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private static models: Map<string, ILlamacppGenerativeAIWorkerModel> = new Map();
 
   /**
-   * The context.
-   * @ignore
-   */
-  private static context?: {
-    modelId: string;
-    instance: LlamaContext;
-  }
-
-  /**
    * The embedding context.
    * @ignore
    */
-  private static embeddingContext?: {
-    modelId: string;
-    instance: LlamaEmbeddingContext;
-  }
+  private static embeddingContext?: LlamaEmbeddingContext;
 
   /**
    * The constructor.
@@ -165,7 +153,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
       if (!model) {
         try {
-          if (modelObj.outputType !== 'text' as GenerativeAIModelOutputType.Text) {
+          if (modelObj.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
             const modelInstance = await engine.loadModel({
               modelPath: modelObj.pathName,
               useMlock: false,
@@ -173,6 +161,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
             model = {
               model: modelInstance,
               workflows: new Set(),
+            }
+            if (!LlamacppGenerativeAIWorkerConnector.embeddingContext) {
+              LlamacppGenerativeAIWorkerConnector.embeddingContext = await modelInstance.createEmbeddingContext();
             }
           } else {
             const modelInstance = await engine.loadModel({
@@ -210,17 +201,12 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (!this.workflowId) {
       return;
     }
+    if (LlamacppGenerativeAIWorkerConnector.embeddingContext) {
+      await LlamacppGenerativeAIWorkerConnector.embeddingContext.dispose();
+    }
     for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
       model.workflows.delete(this.workflowId);
       if (model.workflows.size === 0) {
-        if (LlamacppGenerativeAIWorkerConnector.context?.modelId === id) {
-          await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
-          LlamacppGenerativeAIWorkerConnector.context = undefined;
-        }
-        if (LlamacppGenerativeAIWorkerConnector.embeddingContext?.modelId === id) {
-          await LlamacppGenerativeAIWorkerConnector.embeddingContext.instance.dispose();
-          LlamacppGenerativeAIWorkerConnector.embeddingContext = undefined;
-        }
         await model.model.dispose();
         LlamacppGenerativeAIWorkerConnector.deleteModel(id);
       } else {
@@ -245,38 +231,20 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     }
 
     if (options.model.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
-      if (!LlamacppGenerativeAIWorkerConnector.embeddingContext || LlamacppGenerativeAIWorkerConnector.embeddingContext.modelId !== options.model.id) {
-        if (LlamacppGenerativeAIWorkerConnector.embeddingContext) {
-          await LlamacppGenerativeAIWorkerConnector.embeddingContext.instance.dispose();
-        }
-        const instance = await model.createEmbeddingContext();
-        LlamacppGenerativeAIWorkerConnector.embeddingContext = {
-          modelId: options.model.id,
-          instance,
-        };
+      if (!LlamacppGenerativeAIWorkerConnector.embeddingContext) {
+        throw new Error('Embedding context not initialized');
       }
-      const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext.instance, parameters.prompt);
+      const vector = await this.getVector(LlamacppGenerativeAIWorkerConnector.embeddingContext, parameters.prompt);
       return {
         type: 'prompt' as GenerativeAIWorkerConnectorTypes,
         output: vector,
       };
     }
 
-    if (!LlamacppGenerativeAIWorkerConnector.context || LlamacppGenerativeAIWorkerConnector.context.modelId !== options.model.id) {
-      if (LlamacppGenerativeAIWorkerConnector.context) {
-        await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
-      }
-      const instance = await model.createContext({
-        sequences: 3,
-      });
-      LlamacppGenerativeAIWorkerConnector.context = {
-        modelId: options.model.id,
-        instance,
-      };
-    }
-
+    const context = await model.createContext();
+    console.log('Context size', context.contextSize);
     const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
-    const sequence = LlamacppGenerativeAIWorkerConnector.context.instance.getSequence();
+    const sequence = context.getSequence();
     const { LlamaChatSession } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
       contextSequence: sequence,
@@ -317,6 +285,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     session.dispose();
     sequence.dispose();
+    await context.dispose();
 
     return {
       type: 'prompt' as GenerativeAIWorkerConnectorTypes,
@@ -341,21 +310,10 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       throw new Error('Vector output type not supported for streaming');
     }
 
-    if (!LlamacppGenerativeAIWorkerConnector.context || LlamacppGenerativeAIWorkerConnector.context.modelId !== options.model.id) {
-      if (LlamacppGenerativeAIWorkerConnector.context) {
-        await LlamacppGenerativeAIWorkerConnector.context.instance.dispose();
-      }
-      const instance = await model.createContext({
-        sequences: 3,
-      });
-      LlamacppGenerativeAIWorkerConnector.context = {
-        modelId: options.model.id,
-        instance,
-      };
-    }
-
+    const context = await model.createContext();
+    console.log('Context size', context.contextSize);
     const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
-    const sequence = LlamacppGenerativeAIWorkerConnector.context.instance.getSequence();
+    const sequence = context.getSequence();
     const { LlamaChatSession } = await import('node-llama-cpp');
     const session = new LlamaChatSession({
       contextSequence: sequence,
@@ -418,6 +376,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     session.dispose();
     sequence.dispose();
+    await context.dispose();
   }
 
   private setupSession(session: LlamaChatSession, parameters: GenerativeAIWorkerConnectorParameters): void {
