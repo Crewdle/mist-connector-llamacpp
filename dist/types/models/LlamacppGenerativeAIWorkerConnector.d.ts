@@ -67,12 +67,26 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private static getModel;
     /**
+     * Get a model context.
+     * @param id The model ID.
+     * @returns The model context.
+     * @ignore
+     */
+    private static getContext;
+    /**
      * Set a model.
      * @param id The model ID.
      * @param model The model.
      * @ignore
      */
     private static setModel;
+    /**
+     * Set a model context.
+     * @param id The model ID.
+     * @param context The model context.
+     * @ignore
+     */
+    private static setContext;
     /**
      * Delete a model.
      * @param id The model ID.

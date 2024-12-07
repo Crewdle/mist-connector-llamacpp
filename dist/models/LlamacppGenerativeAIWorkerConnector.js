@@ -96,7 +96,16 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     static getModel(id) {
-        return LlamacppGenerativeAIWorkerConnector.models.get(id);
+        return LlamacppGenerativeAIWorkerConnector.models.get(id)?.model;
+    }
+    /**
+     * Get a model context.
+     * @param id The model ID.
+     * @returns The model context.
+     * @ignore
+     */
+    static getContext(id) {
+        return LlamacppGenerativeAIWorkerConnector.models.get(id)?.context;
     }
     /**
      * Set a model.
@@ -105,7 +114,29 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     static setModel(id, model) {
-        LlamacppGenerativeAIWorkerConnector.models.set(id, model);
+        let existingModel = LlamacppGenerativeAIWorkerConnector.models.get(id);
+        if (existingModel) {
+            existingModel.model = model;
+        }
+        else {
+            existingModel = {
+                model,
+            };
+        }
+        LlamacppGenerativeAIWorkerConnector.models.set(id, existingModel);
+    }
+    /**
+     * Set a model context.
+     * @param id The model ID.
+     * @param context The model context.
+     * @ignore
+     */
+    static setContext(id, context) {
+        const existingModel = LlamacppGenerativeAIWorkerConnector.models.get(id);
+        if (existingModel) {
+            existingModel.context = context;
+            LlamacppGenerativeAIWorkerConnector.models.set(id, existingModel);
+        }
     }
     /**
      * Delete a model.
@@ -182,13 +213,13 @@ export class LlamacppGenerativeAIWorkerConnector {
             await LlamacppGenerativeAIWorkerConnector.embeddingContext.dispose();
         }
         for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
-            model.workflows.delete(this.workflowId);
-            if (model.workflows.size === 0) {
-                await model.model.dispose();
+            model.model.workflows.delete(this.workflowId);
+            if (model.model.workflows.size === 0) {
+                await model.model.model.dispose();
                 LlamacppGenerativeAIWorkerConnector.deleteModel(id);
             }
             else {
-                LlamacppGenerativeAIWorkerConnector.setModel(id, model);
+                LlamacppGenerativeAIWorkerConnector.setModel(id, model.model);
             }
         }
     }
@@ -215,7 +246,13 @@ export class LlamacppGenerativeAIWorkerConnector {
                 output: vector,
             };
         }
-        const context = await model.createContext();
+        let context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
+        if (!context) {
+            context = await model.createContext({
+                sequences: options.sequences,
+            });
+            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
+        }
         console.log('Context size', context.contextSize);
         const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
         const sequence = context.getSequence();
@@ -251,7 +288,10 @@ export class LlamacppGenerativeAIWorkerConnector {
         const outputTokens = sequence.tokenMeter.usedOutputTokens - startingOutputTokens;
         session.dispose();
         sequence.dispose();
-        await context.dispose();
+        if (context.sequencesLeft === (options.sequences ?? 1)) {
+            await context.dispose();
+            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+        }
         return {
             type: 'prompt',
             output,
@@ -272,7 +312,13 @@ export class LlamacppGenerativeAIWorkerConnector {
         if (options.model.outputType === 'vector') {
             throw new Error('Vector output type not supported for streaming');
         }
-        const context = await model.createContext();
+        let context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
+        if (!context) {
+            context = await model.createContext({
+                sequences: options.sequences,
+            });
+            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
+        }
         console.log('Context size', context.contextSize);
         const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
         const sequence = context.getSequence();
@@ -327,7 +373,10 @@ export class LlamacppGenerativeAIWorkerConnector {
         }
         session.dispose();
         sequence.dispose();
-        await context.dispose();
+        if (context.sequencesLeft === (options.sequences ?? 1)) {
+            await context.dispose();
+            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+        }
     }
     setupSession(session, parameters) {
         const { instructions, history } = parameters;
