@@ -246,58 +246,77 @@ export class LlamacppGenerativeAIWorkerConnector {
                 output: vector,
             };
         }
-        let context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
-        if (!context) {
-            context = await model.createContext({
-                sequences: options.sequences,
-            });
-            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
-        }
-        console.log('Context size', context.contextSize);
-        const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
-        const sequence = context.getSequence();
-        const { LlamaChatSession } = await import('node-llama-cpp');
-        const session = new LlamaChatSession({
-            contextSequence: sequence,
-            systemPrompt: instructions ?? this.instructions,
-        });
-        const startingInputTokens = sequence.tokenMeter.usedInputTokens;
-        const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
-        this.setupSession(session, parameters);
-        let promptOptions = {
-            functions: functions ? await this.getFunctions(functions) : undefined,
-            grammar: undefined,
-        };
-        if (grammar) {
-            if (grammar === 'json' || grammar === 'json_arr') {
-                promptOptions.functions = undefined;
-                promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
-            }
-            else if (grammar !== 'default') {
-                promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
-                    grammar,
+        let context;
+        let sequence;
+        let session;
+        try {
+            context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
+            if (!context) {
+                context = await model.createContext({
+                    sequences: options.sequences,
                 });
+                LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
             }
+            console.log('Context size', context.contextSize);
+            const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
+            sequence = context.getSequence();
+            const { LlamaChatSession } = await import('node-llama-cpp');
+            session = new LlamaChatSession({
+                contextSequence: sequence,
+                systemPrompt: instructions ?? this.instructions,
+            });
+            const startingInputTokens = sequence.tokenMeter.usedInputTokens;
+            const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
+            this.setupSession(session, parameters);
+            let promptOptions = {
+                functions: functions ? await this.getFunctions(functions) : undefined,
+                grammar: undefined,
+            };
+            if (grammar) {
+                if (grammar === 'json' || grammar === 'json_arr') {
+                    promptOptions.functions = undefined;
+                    promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+                }
+                else if (grammar !== 'default') {
+                    promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
+                        grammar,
+                    });
+                }
+            }
+            const output = await session.prompt(prompt, {
+                maxTokens: maxTokens ?? this.maxTokens,
+                temperature: temperature ?? this.temperature,
+                ...promptOptions,
+            });
+            const inputTokens = sequence.tokenMeter.usedInputTokens - startingInputTokens;
+            const outputTokens = sequence.tokenMeter.usedOutputTokens - startingOutputTokens;
+            session.dispose();
+            sequence.dispose();
+            if (context.sequencesLeft === (options.sequences ?? 1)) {
+                await context.dispose();
+                LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+            }
+            return {
+                type: 'prompt',
+                output,
+                inputTokens,
+                outputTokens,
+            };
         }
-        const output = await session.prompt(prompt, {
-            maxTokens: maxTokens ?? this.maxTokens,
-            temperature: temperature ?? this.temperature,
-            ...promptOptions,
-        });
-        const inputTokens = sequence.tokenMeter.usedInputTokens - startingInputTokens;
-        const outputTokens = sequence.tokenMeter.usedOutputTokens - startingOutputTokens;
-        session.dispose();
-        sequence.dispose();
-        if (context.sequencesLeft === (options.sequences ?? 1)) {
-            await context.dispose();
-            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+        catch (e) {
+            if (session && !session.disposed) {
+                session.dispose();
+            }
+            if (sequence && !sequence.disposed) {
+                sequence.dispose();
+            }
+            if (context && !context.disposed && context.sequencesLeft === (options.sequences ?? 1)) {
+                await context.dispose();
+                LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+            }
+            console.error(e);
+            throw e;
         }
-        return {
-            type: 'prompt',
-            output,
-            inputTokens,
-            outputTokens,
-        };
     }
     /**
      * Stream a job.
@@ -312,70 +331,89 @@ export class LlamacppGenerativeAIWorkerConnector {
         if (options.model.outputType === 'vector') {
             throw new Error('Vector output type not supported for streaming');
         }
-        let context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
-        if (!context) {
-            context = await model.createContext({
-                sequences: options.sequences,
-            });
-            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
-        }
-        console.log('Context size', context.contextSize);
-        const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
-        const sequence = context.getSequence();
-        const { LlamaChatSession } = await import('node-llama-cpp');
-        const session = new LlamaChatSession({
-            contextSequence: sequence,
-            systemPrompt: instructions ?? this.instructions,
-        });
-        const startingInputTokens = sequence.tokenMeter.usedInputTokens;
-        const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
-        this.setupSession(session, parameters);
-        let promptOptions = {
-            functions: functions ? await this.getFunctions(functions) : undefined,
-            grammar: undefined,
-        };
-        if (grammar) {
-            if (grammar === 'json' || grammar === 'json_arr') {
-                promptOptions.functions = undefined;
-                promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
-            }
-            else if (grammar !== 'default') {
-                promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
-                    grammar,
+        let context;
+        let sequence;
+        let session;
+        try {
+            let context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
+            if (!context) {
+                context = await model.createContext({
+                    sequences: options.sequences,
                 });
+                LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
             }
-        }
-        const textEmitter = new EventEmitter();
-        session.prompt(prompt, {
-            maxTokens: maxTokens ?? this.maxTokens,
-            temperature: temperature ?? this.temperature,
-            ...promptOptions,
-            onTextChunk: (text) => {
-                textEmitter.emit('text', text);
-            },
-        }).then(() => {
-            textEmitter.emit('text', undefined);
-        }).catch(e => {
-            console.error(e);
-            textEmitter.emit('text', undefined);
-        });
-        while (true) {
-            const text = await new Promise((resolve) => textEmitter.once('text', resolve));
-            if (text === undefined) {
-                break;
-            }
-            yield {
-                type: 'prompt',
-                output: text,
-                inputTokens: sequence.tokenMeter.usedInputTokens - startingInputTokens,
-                outputTokens: sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
+            console.log('Context size', context.contextSize);
+            const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
+            sequence = context.getSequence();
+            const { LlamaChatSession } = await import('node-llama-cpp');
+            session = new LlamaChatSession({
+                contextSequence: sequence,
+                systemPrompt: instructions ?? this.instructions,
+            });
+            const startingInputTokens = sequence.tokenMeter.usedInputTokens;
+            const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
+            this.setupSession(session, parameters);
+            let promptOptions = {
+                functions: functions ? await this.getFunctions(functions) : undefined,
+                grammar: undefined,
             };
+            if (grammar) {
+                if (grammar === 'json' || grammar === 'json_arr') {
+                    promptOptions.functions = undefined;
+                    promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+                }
+                else if (grammar !== 'default') {
+                    promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
+                        grammar,
+                    });
+                }
+            }
+            const textEmitter = new EventEmitter();
+            session.prompt(prompt, {
+                maxTokens: maxTokens ?? this.maxTokens,
+                temperature: temperature ?? this.temperature,
+                ...promptOptions,
+                onTextChunk: (text) => {
+                    textEmitter.emit('text', text);
+                },
+            }).then(() => {
+                textEmitter.emit('text', undefined);
+            }).catch(e => {
+                console.error(e);
+                textEmitter.emit('text', undefined);
+            });
+            while (true) {
+                const text = await new Promise((resolve) => textEmitter.once('text', resolve));
+                if (text === undefined) {
+                    break;
+                }
+                yield {
+                    type: 'prompt',
+                    output: text,
+                    inputTokens: sequence.tokenMeter.usedInputTokens - startingInputTokens,
+                    outputTokens: sequence.tokenMeter.usedOutputTokens - startingOutputTokens,
+                };
+            }
+            session.dispose();
+            sequence.dispose();
+            if (context.sequencesLeft === (options.sequences ?? 1)) {
+                await context.dispose();
+                LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+            }
         }
-        session.dispose();
-        sequence.dispose();
-        if (context.sequencesLeft === (options.sequences ?? 1)) {
-            await context.dispose();
-            LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+        catch (e) {
+            if (session && !session.disposed) {
+                session.dispose();
+            }
+            if (sequence && !sequence.disposed) {
+                sequence.dispose();
+            }
+            if (context && !context.disposed && context.sequencesLeft === (options.sequences ?? 1)) {
+                await context.dispose();
+                LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, undefined);
+            }
+            console.error(e);
+            throw e;
         }
     }
     setupSession(session, parameters) {
