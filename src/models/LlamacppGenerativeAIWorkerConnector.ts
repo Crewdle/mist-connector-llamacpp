@@ -48,7 +48,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @ignore
    */
   private static models: Map<string, {
-    model: ILlamacppGenerativeAIWorkerModel
+    model: ILlamacppGenerativeAIWorkerModel,
     context?: LlamaContext
   }> = new Map();
 
@@ -195,6 +195,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
               useMlock: false,
             });
             model = {
+              pathName: modelObj.pathName,
+              outputType: modelObj.outputType,
               model: modelInstance,
               workflows: new Set(),
             }
@@ -202,13 +204,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
               LlamacppGenerativeAIWorkerConnector.embeddingContext = await modelInstance.createEmbeddingContext();
             }
           } else {
-            const modelInstance = await engine.loadModel({
-              modelPath: modelObj.pathName,
-              useMlock: false,
-              defaultContextFlashAttention: true,
-            });
             model = {
-              model: modelInstance,
+              pathName: modelObj.pathName,
+              outputType: modelObj.outputType,
               workflows: new Set(),
             }
           }
@@ -243,7 +241,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
       model.model.workflows.delete(this.workflowId);
       if (model.model.workflows.size === 0) {
-        await model.model.model.dispose();
+        if (model.model.model) {
+          await model.model.model.dispose();
+        }
         LlamacppGenerativeAIWorkerConnector.deleteModel(id);
       } else {
         LlamacppGenerativeAIWorkerConnector.setModel(id, model.model);
@@ -261,9 +261,26 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns A promise that resolves with the job result.
    */
   async processJob(parameters: GenerativeAIWorkerConnectorParameters, options: IGenerativeAIWorkerOptions): Promise<GenerativeAIWorkerConnectorResult> {
-    const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
-    if (!model) {
+    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+    const modelObj = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id);
+
+    if (!modelObj) {
       throw new Error('Model not initialized');
+    }
+
+    let model = modelObj.model;
+    if (!model) {
+      for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+        if (m.model.outputType === 'text' as GenerativeAIModelOutputType.Text && m.model.model) {
+          await m.model.model.dispose();
+          m.model.model = undefined;
+        }
+      }
+      model = await engine.loadModel({
+        modelPath: modelObj.pathName,
+        useMlock: false,
+        defaultContextFlashAttention: true,
+      });
     }
 
     if (options.model.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
@@ -365,9 +382,26 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @returns An async generator that yields the responses.
    */
   async *processJobStream(parameters: IGenerativeAIPromptWorkerConnectorParameters, options: IGenerativeAIWorkerOptions): AsyncGenerator<IGenerativeAIWorkerConnectorPromptResult> {
-    const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
-    if (!model) {
+    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+    const modelObj = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id);
+
+    if (!modelObj) {
       throw new Error('Model not initialized');
+    }
+
+    let model = modelObj.model;
+    if (!model) {
+      for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+        if (m.model.outputType === 'text' as GenerativeAIModelOutputType.Text && m.model.model) {
+          await m.model.model.dispose();
+          m.model.model = undefined;
+        }
+      }
+      model = await engine.loadModel({
+        modelPath: modelObj.pathName,
+        useMlock: false,
+        defaultContextFlashAttention: true,
+      });
     }
 
     if (options.model.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {

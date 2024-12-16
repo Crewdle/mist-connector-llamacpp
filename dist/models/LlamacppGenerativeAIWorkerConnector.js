@@ -166,6 +166,8 @@ export class LlamacppGenerativeAIWorkerConnector {
                             useMlock: false,
                         });
                         model = {
+                            pathName: modelObj.pathName,
+                            outputType: modelObj.outputType,
                             model: modelInstance,
                             workflows: new Set(),
                         };
@@ -174,13 +176,9 @@ export class LlamacppGenerativeAIWorkerConnector {
                         }
                     }
                     else {
-                        const modelInstance = await engine.loadModel({
-                            modelPath: modelObj.pathName,
-                            useMlock: false,
-                            defaultContextFlashAttention: true,
-                        });
                         model = {
-                            model: modelInstance,
+                            pathName: modelObj.pathName,
+                            outputType: modelObj.outputType,
                             workflows: new Set(),
                         };
                     }
@@ -215,7 +213,9 @@ export class LlamacppGenerativeAIWorkerConnector {
         for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
             model.model.workflows.delete(this.workflowId);
             if (model.model.workflows.size === 0) {
-                await model.model.model.dispose();
+                if (model.model.model) {
+                    await model.model.model.dispose();
+                }
                 LlamacppGenerativeAIWorkerConnector.deleteModel(id);
             }
             else {
@@ -232,9 +232,24 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns A promise that resolves with the job result.
      */
     async processJob(parameters, options) {
-        const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
-        if (!model) {
+        const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+        const modelObj = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id);
+        if (!modelObj) {
             throw new Error('Model not initialized');
+        }
+        let model = modelObj.model;
+        if (!model) {
+            for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+                if (m.model.outputType === 'text' && m.model.model) {
+                    await m.model.model.dispose();
+                    m.model.model = undefined;
+                }
+            }
+            model = await engine.loadModel({
+                modelPath: modelObj.pathName,
+                useMlock: false,
+                defaultContextFlashAttention: true,
+            });
         }
         if (options.model.outputType === 'vector') {
             if (!LlamacppGenerativeAIWorkerConnector.embeddingContext) {
@@ -324,9 +339,24 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @returns An async generator that yields the responses.
      */
     async *processJobStream(parameters, options) {
-        const model = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id)?.model;
-        if (!model) {
+        const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+        const modelObj = LlamacppGenerativeAIWorkerConnector.getModel(options.model.id);
+        if (!modelObj) {
             throw new Error('Model not initialized');
+        }
+        let model = modelObj.model;
+        if (!model) {
+            for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+                if (m.model.outputType === 'text' && m.model.model) {
+                    await m.model.model.dispose();
+                    m.model.model = undefined;
+                }
+            }
+            model = await engine.loadModel({
+                modelPath: modelObj.pathName,
+                useMlock: false,
+                defaultContextFlashAttention: true,
+            });
         }
         if (options.model.outputType === 'vector') {
             throw new Error('Vector output type not supported for streaming');
