@@ -2,7 +2,7 @@ import { rmSync } from 'fs';
 
 import { EventEmitter } from 'events';
 
-import type { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession, LlamaContextSequence } from 'node-llama-cpp';
+import { Llama, LlamaEmbeddingContext, LlamaContext, ChatHistoryItem, LlamaChatSession, LlamaContextSequence } from 'node-llama-cpp';
 
 import type { GenerativeAIEngineType, GenerativeAIModelOutputType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult, GenerativeAIWorkerConnectorTypes, IPromptFunction } from '@crewdle/web-sdk-types';
 
@@ -270,17 +270,22 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     let model = modelObj.model;
     if (!model) {
-      for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+      for (const [id, m] of LlamacppGenerativeAIWorkerConnector.models.entries()) {
         if (m.model.outputType === 'text' as GenerativeAIModelOutputType.Text && m.model.model) {
+          console.log('Disposing model', id);
           await m.model.model.dispose();
           m.model.model = undefined;
+          LlamacppGenerativeAIWorkerConnector.setModel(id, m.model);
         }
       }
+      console.log('Loading model', options.model.id);
       model = await engine.loadModel({
         modelPath: modelObj.pathName,
         useMlock: false,
         defaultContextFlashAttention: true,
       });
+      modelObj.model = model;
+      LlamacppGenerativeAIWorkerConnector.setModel(options.model.id, modelObj);
     }
 
     if (options.model.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
@@ -391,17 +396,22 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
     let model = modelObj.model;
     if (!model) {
-      for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+      for (const [id, m] of LlamacppGenerativeAIWorkerConnector.models.entries()) {
         if (m.model.outputType === 'text' as GenerativeAIModelOutputType.Text && m.model.model) {
+          console.log('Disposing model', id);
           await m.model.model.dispose();
           m.model.model = undefined;
+          LlamacppGenerativeAIWorkerConnector.setModel(id, m.model);
         }
       }
+      console.log('Loading model', options.model.id);
       model = await engine.loadModel({
         modelPath: modelObj.pathName,
         useMlock: false,
         defaultContextFlashAttention: true,
       });
+      modelObj.model = model;
+      LlamacppGenerativeAIWorkerConnector.setModel(options.model.id, modelObj);
     }
 
     if (options.model.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {

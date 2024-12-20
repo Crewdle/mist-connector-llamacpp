@@ -239,17 +239,22 @@ export class LlamacppGenerativeAIWorkerConnector {
         }
         let model = modelObj.model;
         if (!model) {
-            for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+            for (const [id, m] of LlamacppGenerativeAIWorkerConnector.models.entries()) {
                 if (m.model.outputType === 'text' && m.model.model) {
+                    console.log('Disposing model', id);
                     await m.model.model.dispose();
                     m.model.model = undefined;
+                    LlamacppGenerativeAIWorkerConnector.setModel(id, m.model);
                 }
             }
+            console.log('Loading model', options.model.id);
             model = await engine.loadModel({
                 modelPath: modelObj.pathName,
                 useMlock: false,
                 defaultContextFlashAttention: true,
             });
+            modelObj.model = model;
+            LlamacppGenerativeAIWorkerConnector.setModel(options.model.id, modelObj);
         }
         if (options.model.outputType === 'vector') {
             if (!LlamacppGenerativeAIWorkerConnector.embeddingContext) {
@@ -346,17 +351,22 @@ export class LlamacppGenerativeAIWorkerConnector {
         }
         let model = modelObj.model;
         if (!model) {
-            for (const m of LlamacppGenerativeAIWorkerConnector.models.values()) {
+            for (const [id, m] of LlamacppGenerativeAIWorkerConnector.models.entries()) {
                 if (m.model.outputType === 'text' && m.model.model) {
+                    console.log('Disposing model', id);
                     await m.model.model.dispose();
                     m.model.model = undefined;
+                    LlamacppGenerativeAIWorkerConnector.setModel(id, m.model);
                 }
             }
+            console.log('Loading model', options.model.id);
             model = await engine.loadModel({
                 modelPath: modelObj.pathName,
                 useMlock: false,
                 defaultContextFlashAttention: true,
             });
+            modelObj.model = model;
+            LlamacppGenerativeAIWorkerConnector.setModel(options.model.id, modelObj);
         }
         if (options.model.outputType === 'vector') {
             throw new Error('Vector output type not supported for streaming');
