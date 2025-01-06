@@ -209,6 +209,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         }
         if (LlamacppGenerativeAIWorkerConnector.embeddingContext) {
             await LlamacppGenerativeAIWorkerConnector.embeddingContext.dispose();
+            LlamacppGenerativeAIWorkerConnector.embeddingContext = undefined;
         }
         for (const [id, model] of LlamacppGenerativeAIWorkerConnector.models) {
             model.model.workflows.delete(this.workflowId);
@@ -498,7 +499,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @ignore
      */
     cleanText(text) {
-        return text.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '');
+        return text.trim().toLowerCase();
     }
     /**
      * Normalize a vector.
