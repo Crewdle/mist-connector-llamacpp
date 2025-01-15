@@ -572,6 +572,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    */
   private normalizeVector(vector: readonly number[]): number[] {
     const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+    if (Math.abs(norm - 1) < 0.01) {
+      return vector.map((value) => value);
+    }
     return vector.map((value) => value / norm);
   }
 
