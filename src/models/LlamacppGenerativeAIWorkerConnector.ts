@@ -313,7 +313,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
       }
       console.log('Context size', context.contextSize);
-      const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
+      const { prompt, functions, reasoning, grammar, maxTokens, temperature, instructions } = parameters;
       sequence = context.getSequence();
       const { LlamaChatSession } = await import('node-llama-cpp');
       session = new LlamaChatSession({
@@ -344,7 +344,29 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         }
       }
 
-      const output = await session.prompt(prompt, {
+      let output = '';
+      let finalPrompt = '';
+      if (reasoning) {
+        let thinking = '';
+        thinking += await session.prompt(`Analyze the following question and explain the steps needed to answer it without actually providing the final answer. Explain the reasoning process, key considerations, and possible strategies to find the answer.\nQuestion: ${prompt}`, {
+          maxTokens: maxTokens ?? this.maxTokens,
+          temperature: temperature ?? this.temperature,
+          ...promptOptions,
+        });
+
+        if (thinking.length < 500) {
+          thinking += await session.prompt(`Analyze the following question and explain the steps needed to answer it without actually providing the final answer. Explain the reasoning process, key considerations, and possible strategies to find the answer.\nInitial thoughts:${thinking}\nQuestion: ${prompt}`, {
+            maxTokens: maxTokens ?? this.maxTokens,
+            temperature: temperature ?? this.temperature,
+            ...promptOptions,
+          });
+        }
+
+        output += `<think>${thinking}</think>\n\n`;
+        finalPrompt += `<think>${thinking}</think>\n\n`;
+      }
+      finalPrompt += prompt;
+      output += await session.prompt(finalPrompt, {
         maxTokens: maxTokens ?? this.maxTokens,
         temperature: temperature ?? this.temperature,
         ...promptOptions,
@@ -432,7 +454,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         LlamacppGenerativeAIWorkerConnector.setContext(options.model.id, context);
       }
       console.log('Context size', context.contextSize);
-      const { prompt, functions, grammar, maxTokens, temperature, instructions } = parameters;
+      const { prompt, functions, reasoning, grammar, maxTokens, temperature, instructions } = parameters;
       sequence = context.getSequence();
       const { LlamaChatSession } = await import('node-llama-cpp');
       session = new LlamaChatSession({
@@ -465,19 +487,62 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
 
       const textEmitter = new EventEmitter();
 
-      session.prompt(prompt, {
-        maxTokens: maxTokens ?? this.maxTokens,
-        temperature: temperature ?? this.temperature,
-        ...promptOptions,
-        onTextChunk: (text) => {
-          textEmitter.emit('text', text);
-        },
-      }).then(() => {
-        textEmitter.emit('text', undefined);
-      }).catch(e => {
-        console.error(e);
-        textEmitter.emit('text', undefined);
-      });
+      const runPrompt = (finalPrompt: string) => {
+        session!.prompt(finalPrompt, {
+          maxTokens: maxTokens ?? this.maxTokens,
+          temperature: temperature ?? this.temperature,
+          ...promptOptions,
+          onTextChunk: (text) => {
+            textEmitter.emit('text', text);
+          },
+        }).then(() => {
+          textEmitter.emit('text', undefined);
+        }).catch(e => {
+          console.error(e);
+          textEmitter.emit('text', undefined);
+        });
+      };
+
+      if (reasoning) {
+        let thinking = '';
+        session.prompt(`Analyze the following question and explain the steps needed to answer it without actually providing the final answer. Explain the reasoning process, key considerations, and possible strategies to find the answer.\nQuestion: ${prompt}`, {
+          maxTokens: maxTokens ?? this.maxTokens,
+          temperature: temperature ?? this.temperature,
+          onTextChunk: (text) => {
+            if (thinking === '') {
+              textEmitter.emit('text', `<think>${text}`);
+            } else {
+              textEmitter.emit('text', text);
+            }
+            thinking += text;
+          },
+        }).then(() => {
+          if (thinking.length < 500) {
+            session!.prompt(`Analyze the following question and explain the steps needed to answer it without actually providing the final answer. Explain the reasoning process, key considerations, and possible strategies to find the answer.\nInitial thoughts:${thinking}\nQuestion: ${prompt}`, {
+              maxTokens: maxTokens ?? this.maxTokens,
+              temperature: temperature ?? this.temperature,
+              onTextChunk: (text) => {
+                textEmitter.emit('text', text);
+                thinking += text;
+              },
+            }).then(() => {
+              textEmitter.emit('text', '</think>\n\n');
+              runPrompt(`<think>${thinking}</think>\n\n${prompt}`);
+            }).catch(e => {
+              console.error(e);
+              textEmitter.emit('text', undefined);
+            });
+          } else {
+            textEmitter.emit('text', '</think>\n\n');
+            runPrompt(`<think>${thinking}</think>\n\n${prompt}`);
+          }
+        }).catch(e => {
+          console.error(e);
+          textEmitter.emit('text', undefined);
+        });
+      } else {
+        runPrompt(prompt);
+      }
 
       while (true) {
         const text = await new Promise<string>((resolve) => textEmitter.once('text', resolve));
