@@ -41,6 +41,11 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private static embeddingContext?;
     /**
+     * The base folder.
+     * @ignore
+     */
+    private baseFolder?;
+    /**
      * The constructor.
      * @param options The options.
      */
