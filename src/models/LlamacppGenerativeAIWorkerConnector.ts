@@ -220,12 +220,9 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
                 reject(err);
               });
             });
-            modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
           }
 
-          if (!modelObj.pathName) {
-            throw new Error('Model path not set');
-          }
+          modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
 
           if (modelObj.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
             const modelInstance = await engine.loadModel({

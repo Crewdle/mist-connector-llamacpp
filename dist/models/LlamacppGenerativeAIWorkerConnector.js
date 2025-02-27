@@ -187,11 +187,8 @@ export class LlamacppGenerativeAIWorkerConnector {
                                 reject(err);
                             });
                         });
-                        modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
                     }
-                    if (!modelObj.pathName) {
-                        throw new Error('Model path not set');
-                    }
+                    modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
                     if (modelObj.outputType === 'vector') {
                         const modelInstance = await engine.loadModel({
                             modelPath: modelObj.pathName,
