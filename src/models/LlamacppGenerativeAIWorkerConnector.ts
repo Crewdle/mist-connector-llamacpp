@@ -1,4 +1,4 @@
-import { rmSync, existsSync, createWriteStream, unlinkSync } from 'fs';
+import { existsSync, createWriteStream, unlinkSync } from 'fs';
 import https from 'follow-redirects/https.js';
 
 import { EventEmitter } from 'events';
@@ -203,6 +203,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       if (!model) {
         try {
           if (!existsSync(`${this.baseFolder}/${modelObj.id}.gguf`)) {
+            console.log(`Downloading model ${modelObj.id}: ${modelObj.sourceUrl}`);
             await new Promise<void>((resolve, reject) => {
               const fileStream = createWriteStream(`${this.baseFolder}/${modelObj.id}.gguf`);
               https.get(modelObj.sourceUrl, (response) => {
@@ -253,7 +254,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
           this.workflowId = workflowId;
         } catch (e) {
           console.error(e);
-          rmSync(`${this.baseFolder}/${modelObj.id}.gguf`);
+          unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
           throw e;
         }
       } else {
