@@ -365,7 +365,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         functions?: {[key: string]: any},
         grammar?: any,
       } = {
-        functions: functions ? await this.getFunctions(functions) : undefined,
+        functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
         grammar: undefined,
       }
       if (grammar) {
@@ -506,7 +506,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         functions?: {[key: string]: any},
         grammar?: any,
       } = {
-        functions: functions ? await this.getFunctions(functions) : undefined,
+        functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
         grammar: undefined,
       }
       if (grammar) {

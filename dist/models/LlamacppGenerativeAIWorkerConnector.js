@@ -319,7 +319,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
             this.setupSession(session, parameters);
             let promptOptions = {
-                functions: functions ? await this.getFunctions(functions) : undefined,
+                functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
                 grammar: undefined,
             };
             if (grammar) {
@@ -444,7 +444,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
             this.setupSession(session, parameters);
             let promptOptions = {
-                functions: functions ? await this.getFunctions(functions) : undefined,
+                functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
                 grammar: undefined,
             };
             if (grammar) {
