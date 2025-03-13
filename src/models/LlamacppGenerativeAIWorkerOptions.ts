@@ -3,6 +3,11 @@
  */
 export interface ILlamacppGenerativeAIWorkerOptions {
   /**
+   * The base folder.
+   */
+  baseFolder: string;
+  
+  /**
    * The instructions for the LLM.
    */
   instructions?: string;

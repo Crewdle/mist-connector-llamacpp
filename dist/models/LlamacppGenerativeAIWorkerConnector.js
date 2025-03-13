@@ -1,4 +1,5 @@
-import { rmSync } from 'fs';
+import { existsSync, createWriteStream, unlinkSync } from 'fs';
+import https from 'follow-redirects/https.js';
 import { EventEmitter } from 'events';
 /**
  * The Llamacpp machine learning connector.
@@ -41,6 +42,11 @@ export class LlamacppGenerativeAIWorkerConnector {
      */
     static embeddingContext;
     /**
+     * The base folder.
+     * @ignore
+     */
+    baseFolder;
+    /**
      * The constructor.
      * @param options The options.
      */
@@ -55,6 +61,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         if (this.options?.temperature) {
             this.temperature = this.options.temperature;
         }
+        this.baseFolder = this.options?.baseFolder;
     }
     /**
      * Get the VRAM state.
@@ -152,14 +159,36 @@ export class LlamacppGenerativeAIWorkerConnector {
      * @param models The models to initialize.
      */
     async initialize(workflowId, models) {
+        if (!this.baseFolder) {
+            throw new Error('Base folder not set');
+        }
         const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
         for (const [modelName, modelObj] of models) {
-            if (modelObj.engineType !== 'llamacpp' || !modelObj.pathName) {
+            if (modelObj.engineType !== 'llamacpp') {
                 continue;
             }
             let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
             if (!model) {
                 try {
+                    if (!existsSync(`${this.baseFolder}/${modelObj.id}.gguf`)) {
+                        console.log(`Downloading model ${modelObj.id}: ${modelObj.sourceUrl}`);
+                        await new Promise((resolve, reject) => {
+                            const fileStream = createWriteStream(`${this.baseFolder}/${modelObj.id}.gguf`);
+                            https.get(modelObj.sourceUrl, (response) => {
+                                response.pipe(fileStream);
+                                fileStream.on('finish', () => {
+                                    fileStream.close(() => {
+                                        resolve();
+                                    });
+                                });
+                            }).on('error', (err) => {
+                                unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
+                                console.error(`Error downloading the file: ${err.message}`);
+                                reject(err);
+                            });
+                        });
+                    }
+                    modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
                     if (modelObj.outputType === 'vector') {
                         const modelInstance = await engine.loadModel({
                             modelPath: modelObj.pathName,
@@ -188,7 +217,7 @@ export class LlamacppGenerativeAIWorkerConnector {
                 }
                 catch (e) {
                     console.error(e);
-                    rmSync(modelObj.pathName);
+                    unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
                     throw e;
                 }
             }
@@ -290,7 +319,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
             this.setupSession(session, parameters);
             let promptOptions = {
-                functions: functions ? await this.getFunctions(functions) : undefined,
+                functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
                 grammar: undefined,
             };
             if (grammar) {
@@ -415,7 +444,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
             this.setupSession(session, parameters);
             let promptOptions = {
-                functions: functions ? await this.getFunctions(functions) : undefined,
+                functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
                 grammar: undefined,
             };
             if (grammar) {

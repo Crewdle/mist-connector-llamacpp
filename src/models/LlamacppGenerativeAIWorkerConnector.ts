@@ -1,4 +1,5 @@
-import { rmSync } from 'fs';
+import { existsSync, createWriteStream, unlinkSync } from 'fs';
+import https from 'follow-redirects/https.js';
 
 import { EventEmitter } from 'events';
 
@@ -59,6 +60,12 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
   private static embeddingContext?: LlamaEmbeddingContext;
 
   /**
+   * The base folder.
+   * @ignore
+   */
+  private baseFolder?: string;
+
+  /**
    * The constructor.
    * @param options The options.
    */
@@ -74,6 +81,8 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
     if (this.options?.temperature) {
       this.temperature = this.options.temperature;
     }
+
+    this.baseFolder = this.options?.baseFolder;
   }
 
   /**
@@ -181,14 +190,40 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param models The models to initialize.
    */
   async initialize(workflowId: string, models: Map<string, IGenerativeAIModel>): Promise<void> {
+    if (!this.baseFolder) {
+      throw new Error('Base folder not set');
+    }
+
     const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
     for (const [modelName, modelObj] of models) {
-      if (modelObj.engineType !== 'llamacpp' || !modelObj.pathName) {
+      if (modelObj.engineType !== 'llamacpp') {
         continue;
       }
       let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
       if (!model) {
         try {
+          if (!existsSync(`${this.baseFolder}/${modelObj.id}.gguf`)) {
+            console.log(`Downloading model ${modelObj.id}: ${modelObj.sourceUrl}`);
+            await new Promise<void>((resolve, reject) => {
+              const fileStream = createWriteStream(`${this.baseFolder}/${modelObj.id}.gguf`);
+              https.get(modelObj.sourceUrl, (response) => {
+                response.pipe(fileStream);
+          
+                fileStream.on('finish', () => {
+                  fileStream.close(() => {
+                    resolve();
+                  });
+                });
+              }).on('error', (err) => {
+                unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
+                console.error(`Error downloading the file: ${err.message}`);
+                reject(err);
+              });
+            });
+          }
+
+          modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
+
           if (modelObj.outputType === 'vector' as GenerativeAIModelOutputType.Vector) {
             const modelInstance = await engine.loadModel({
               modelPath: modelObj.pathName,
@@ -216,7 +251,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
           this.workflowId = workflowId;
         } catch (e) {
           console.error(e);
-          rmSync(modelObj.pathName);
+          unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
           throw e;
         }
       } else {
@@ -330,7 +365,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         functions?: {[key: string]: any},
         grammar?: any,
       } = {
-        functions: functions ? await this.getFunctions(functions) : undefined,
+        functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
         grammar: undefined,
       }
       if (grammar) {
@@ -471,7 +506,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
         functions?: {[key: string]: any},
         grammar?: any,
       } = {
-        functions: functions ? await this.getFunctions(functions) : undefined,
+        functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
         grammar: undefined,
       }
       if (grammar) {
