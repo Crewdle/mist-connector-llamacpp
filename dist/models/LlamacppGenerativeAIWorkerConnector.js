@@ -5,6 +5,7 @@ import { EventEmitter } from 'events';
  * The Llamacpp machine learning connector.
  */
 export class LlamacppGenerativeAIWorkerConnector {
+    apiKey;
     options;
     /**
      * The instructions.
@@ -50,7 +51,8 @@ export class LlamacppGenerativeAIWorkerConnector {
      * The constructor.
      * @param options The options.
      */
-    constructor(options) {
+    constructor(apiKey, options) {
+        this.apiKey = apiKey;
         this.options = options;
         if (this.options?.instructions) {
             this.instructions = this.options.instructions;

@@ -4,6 +4,7 @@ import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorker
  * The Llamacpp machine learning connector.
  */
 export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerConnector {
+    private apiKey?;
     private options?;
     /**
      * The instructions.
@@ -49,7 +50,7 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * The constructor.
      * @param options The options.
      */
-    constructor(options?: ILlamacppGenerativeAIWorkerOptions | undefined);
+    constructor(apiKey?: string | undefined, options?: ILlamacppGenerativeAIWorkerOptions | undefined);
     /**
      * Get the VRAM state.
      * @returns The total and available VRAM.

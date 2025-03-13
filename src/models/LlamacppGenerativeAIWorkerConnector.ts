@@ -70,6 +70,7 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
    * @param options The options.
    */
   constructor(
+    private apiKey?: string,
     private options?: ILlamacppGenerativeAIWorkerOptions,
   ) {
     if (this.options?.instructions) {

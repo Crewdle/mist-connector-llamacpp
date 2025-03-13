@@ -5,7 +5,7 @@ export function getLlamacppGenerativeAIWorkerConnector(options) {
     }
     return class LlamacppGenerativeAIWorkerConnectorWithInjectedOptions extends LlamacppGenerativeAIWorkerConnector {
         constructor() {
-            super(options);
+            super(undefined, options);
         }
     };
 }
