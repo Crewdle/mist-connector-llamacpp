@@ -372,11 +372,25 @@ export class LlamacppGenerativeAIWorkerConnector implements IGenerativeAIWorkerC
       if (grammar) {
         if (grammar === 'json' || grammar === 'json_arr') {
           promptOptions.functions = undefined;
-          promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
-        } else if (grammar !== 'default') {
-          promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
-            grammar,
+          const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+          promptOptions.grammar = await engine.getGrammarFor(grammar);
+        } else if (grammar === 'if_else') {
+          promptOptions.functions = undefined;
+          const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+          promptOptions.grammar = await engine.createGrammarForJsonSchema({
+            type: 'object',
+            properties: {
+              'condition_result': {
+                type: 'boolean'
+              }
+            },
+            required: ['result'],
+            additionalProperties: false,
           });
+        } else if (grammar !== 'default') {
+          promptOptions.functions = undefined;
+          const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+          promptOptions.grammar = await engine.createGrammarForJsonSchema(grammar);
         }
       }
 
