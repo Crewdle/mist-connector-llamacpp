@@ -1,6 +1,12 @@
-import { existsSync, createWriteStream, unlinkSync } from 'fs';
-import https from 'follow-redirects/https.js';
+import { existsSync, unlinkSync, readdirSync, readFileSync, statSync } from 'fs';
+import { join, resolve } from 'path';
+import { homedir, platform, arch, release, totalmem, freemem, cpus } from 'os';
+import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
+import { resolveModelFile } from 'node-llama-cpp';
+import officeParser from 'officeparser';
+import robot from '@jitsi/robotjs';
+import screenshotDesktop from 'screenshot-desktop';
 /**
  * The Llamacpp machine learning connector.
  */
@@ -16,7 +22,7 @@ export class LlamacppGenerativeAIWorkerConnector {
      * The maximum number of tokens to generate.
      * @ignore
      */
-    maxTokens = 1024;
+    maxTokens = 4096;
     /**
      * The temperature.
      * @ignore
@@ -165,6 +171,9 @@ export class LlamacppGenerativeAIWorkerConnector {
             throw new Error('Base folder not set');
         }
         const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+        console.log('Engine', engine.gpu, engine.supportsGpuOffloading);
+        const vramState = await engine.getVramState();
+        console.log('VRAM state', vramState.total, vramState.free, vramState.used, vramState.unifiedSize);
         for (const [modelName, modelObj] of models) {
             if (modelObj.engineType !== 'llamacpp') {
                 continue;
@@ -172,25 +181,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             let model = LlamacppGenerativeAIWorkerConnector.getModel(modelName);
             if (!model) {
                 try {
-                    if (!existsSync(`${this.baseFolder}/${modelObj.id}.gguf`)) {
-                        console.log(`Downloading model ${modelObj.id}: ${modelObj.sourceUrl}`);
-                        await new Promise((resolve, reject) => {
-                            const fileStream = createWriteStream(`${this.baseFolder}/${modelObj.id}.gguf`);
-                            https.get(modelObj.sourceUrl, (response) => {
-                                response.pipe(fileStream);
-                                fileStream.on('finish', () => {
-                                    fileStream.close(() => {
-                                        resolve();
-                                    });
-                                });
-                            }).on('error', (err) => {
-                                unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
-                                console.error(`Error downloading the file: ${err.message}`);
-                                reject(err);
-                            });
-                        });
-                    }
-                    modelObj.pathName = `${this.baseFolder}/${modelObj.id}.gguf`;
+                    modelObj.pathName = await resolveModelFile(modelObj.sourceUrl, this.baseFolder);
                     if (modelObj.outputType === 'vector') {
                         const modelInstance = await engine.loadModel({
                             modelPath: modelObj.pathName,
@@ -219,7 +210,10 @@ export class LlamacppGenerativeAIWorkerConnector {
                 }
                 catch (e) {
                     console.error(e);
-                    unlinkSync(`${this.baseFolder}/${modelObj.id}.gguf`);
+                    const modelPath = `${this.baseFolder}/${modelObj.id}.gguf`;
+                    if (existsSync(modelPath)) {
+                        unlinkSync(modelPath);
+                    }
                     throw e;
                 }
             }
@@ -321,7 +315,7 @@ export class LlamacppGenerativeAIWorkerConnector {
             const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
             this.setupSession(session, parameters);
             let promptOptions = {
-                functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
+                functions: await this.getFunctions(functions ?? new Map()),
                 grammar: undefined,
             };
             if (grammar) {
@@ -442,7 +436,7 @@ export class LlamacppGenerativeAIWorkerConnector {
         let sequence;
         let session;
         try {
-            let context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
+            context = LlamacppGenerativeAIWorkerConnector.getContext(options.model.id);
             if (!context) {
                 context = await model.createContext({
                     sequences: options.sequences,
@@ -461,18 +455,33 @@ export class LlamacppGenerativeAIWorkerConnector {
             const startingOutputTokens = sequence.tokenMeter.usedOutputTokens;
             this.setupSession(session, parameters);
             let promptOptions = {
-                functions: (functions && functions.size > 0) ? await this.getFunctions(functions) : undefined,
+                functions: await this.getFunctions(functions ?? new Map()),
                 grammar: undefined,
             };
             if (grammar) {
                 if (grammar === 'json' || grammar === 'json_arr') {
                     promptOptions.functions = undefined;
-                    promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).getGrammarFor(grammar);
+                    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+                    promptOptions.grammar = await engine.getGrammarFor(grammar);
+                }
+                else if (grammar === 'if_else') {
+                    promptOptions.functions = undefined;
+                    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+                    promptOptions.grammar = await engine.createGrammarForJsonSchema({
+                        type: 'object',
+                        properties: {
+                            'condition_result': {
+                                type: 'boolean'
+                            }
+                        },
+                        required: ['result'],
+                        additionalProperties: false,
+                    });
                 }
                 else if (grammar !== 'default') {
-                    promptOptions.grammar = await (await LlamacppGenerativeAIWorkerConnector.getEngine()).createGrammar({
-                        grammar,
-                    });
+                    promptOptions.functions = undefined;
+                    const engine = await LlamacppGenerativeAIWorkerConnector.getEngine();
+                    promptOptions.grammar = await engine.createGrammarForJsonSchema(grammar);
                 }
             }
             const textEmitter = new EventEmitter();
@@ -633,8 +642,450 @@ export class LlamacppGenerativeAIWorkerConnector {
     async getFunctions(functions) {
         const { defineChatSessionFunction } = await import('node-llama-cpp');
         let functionsObj = {};
+        // Add built-in system functions
+        functionsObj['list_directory'] = defineChatSessionFunction({
+            description: 'List files and directories in a specified path',
+            params: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'The directory path to list. Defaults to current working directory if not provided.',
+                    }
+                }
+            },
+            handler(params) {
+                console.log('list_directory', params);
+                try {
+                    const dirPath = params.path ? resolve(params.path) : process.cwd();
+                    const items = readdirSync(dirPath);
+                    const details = items.map(item => {
+                        const fullPath = join(dirPath, item);
+                        const stats = statSync(fullPath);
+                        return {
+                            name: item,
+                            type: stats.isDirectory() ? 'directory' : 'file',
+                            size: stats.size,
+                            modified: stats.mtime.toISOString(),
+                        };
+                    });
+                    return JSON.stringify({ path: dirPath, items: details });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['read_file'] = defineChatSessionFunction({
+            description: 'Read the contents of a file',
+            params: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'The file path to read',
+                    },
+                    encoding: {
+                        type: 'string',
+                        description: 'The file encoding. Defaults to utf8.',
+                    }
+                }
+            },
+            handler(params) {
+                console.log('read_file', params);
+                try {
+                    const filePath = resolve(params.path);
+                    const content = readFileSync(filePath, { encoding: (params.encoding || 'utf8') });
+                    return JSON.stringify({ path: filePath, content, size: content.length });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['read_document'] = defineChatSessionFunction({
+            description: 'Read and parse document files (PDF, DOCX, PPTX, ODT, etc.) and extract text content',
+            params: {
+                type: 'object',
+                properties: {
+                    path: {
+                        type: 'string',
+                        description: 'The document file path to read',
+                    }
+                }
+            },
+            handler: async (params) => {
+                console.log('read_document', params);
+                try {
+                    const filePath = resolve(params.path);
+                    const text = await officeParser.parseOfficeAsync(filePath);
+                    const stats = statSync(filePath);
+                    return JSON.stringify({
+                        path: filePath,
+                        content: text,
+                        size: stats.size,
+                        wordCount: text.split(/\s+/).filter(word => word.length > 0).length,
+                        characterCount: text.length,
+                    });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['search_files'] = defineChatSessionFunction({
+            description: 'Search for files using glob patterns (e.g., **/*.ts, src/**/*.json)',
+            params: {
+                type: 'object',
+                properties: {
+                    pattern: {
+                        type: 'string',
+                        description: 'The glob pattern to match files (e.g., **/*.ts, src/**/*.json)',
+                    },
+                    basePath: {
+                        type: 'string',
+                        description: 'The base directory to search from. Defaults to current working directory.',
+                    }
+                }
+            },
+            handler(params) {
+                console.log('search_files', params);
+                try {
+                    const searchPath = params.basePath ? resolve(params.basePath) : process.cwd();
+                    const results = [];
+                    const searchDir = (dir, pattern) => {
+                        const items = readdirSync(dir);
+                        for (const item of items) {
+                            const fullPath = join(dir, item);
+                            try {
+                                const stats = statSync(fullPath);
+                                if (stats.isDirectory()) {
+                                    if (!item.startsWith('.') && item !== 'node_modules') {
+                                        searchDir(fullPath, pattern);
+                                    }
+                                }
+                                else {
+                                    const regex = new RegExp(pattern.replace(/\*/g, '.*').replace(/\?/g, '.'));
+                                    if (regex.test(fullPath)) {
+                                        results.push(fullPath);
+                                    }
+                                }
+                            }
+                            catch (e) {
+                                // Skip inaccessible files
+                            }
+                        }
+                    };
+                    searchDir(searchPath, params.pattern);
+                    return JSON.stringify({ pattern: params.pattern, basePath: searchPath, results, count: results.length });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['grep'] = defineChatSessionFunction({
+            description: 'Search for text patterns in files using regex',
+            params: {
+                type: 'object',
+                properties: {
+                    pattern: {
+                        type: 'string',
+                        description: 'The regex pattern to search for',
+                    },
+                    path: {
+                        type: 'string',
+                        description: 'The file or directory path to search in',
+                    },
+                    filePattern: {
+                        type: 'string',
+                        description: 'Optional glob pattern to filter files (e.g., *.ts)',
+                    }
+                }
+            },
+            handler(params) {
+                console.log('grep', params);
+                try {
+                    const searchPath = resolve(params.path);
+                    const regex = new RegExp(params.pattern, 'gi');
+                    const matches = [];
+                    const searchFile = (filePath) => {
+                        try {
+                            const content = readFileSync(filePath, 'utf8');
+                            const lines = content.split('\n');
+                            lines.forEach((line, index) => {
+                                if (regex.test(line)) {
+                                    matches.push({
+                                        file: filePath,
+                                        line: index + 1,
+                                        content: line.trim(),
+                                    });
+                                }
+                            });
+                        }
+                        catch (e) {
+                            // Skip unreadable files
+                        }
+                    };
+                    const searchDir = (dir) => {
+                        const items = readdirSync(dir);
+                        for (const item of items) {
+                            const fullPath = join(dir, item);
+                            try {
+                                const stats = statSync(fullPath);
+                                if (stats.isDirectory()) {
+                                    if (!item.startsWith('.') && item !== 'node_modules') {
+                                        searchDir(fullPath);
+                                    }
+                                }
+                                else {
+                                    if (!params.filePattern || new RegExp(params.filePattern.replace(/\*/g, '.*')).test(item)) {
+                                        searchFile(fullPath);
+                                    }
+                                }
+                            }
+                            catch (e) {
+                                // Skip inaccessible files
+                            }
+                        }
+                    };
+                    const stats = statSync(searchPath);
+                    if (stats.isDirectory()) {
+                        searchDir(searchPath);
+                    }
+                    else {
+                        searchFile(searchPath);
+                    }
+                    return JSON.stringify({ pattern: params.pattern, path: searchPath, matches, count: matches.length });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['get_working_directory'] = defineChatSessionFunction({
+            description: 'Get the current working directory',
+            handler() {
+                console.log('get_working_directory');
+                try {
+                    const cwd = process.cwd();
+                    return JSON.stringify({ cwd, home: homedir() });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['get_system_info'] = defineChatSessionFunction({
+            description: 'Get system information including OS, platform, memory, and CPU details',
+            handler() {
+                console.log('get_system_info');
+                try {
+                    const info = {
+                        platform: platform(),
+                        arch: arch(),
+                        release: release(),
+                        hostname: execSync('hostname', { encoding: 'utf8' }).trim(),
+                        cpus: cpus().map(cpu => ({
+                            model: cpu.model,
+                            speed: cpu.speed,
+                        })),
+                        cpuCount: cpus().length,
+                        totalMemory: totalmem(),
+                        freeMemory: freemem(),
+                        memoryUsage: process.memoryUsage(),
+                        uptime: process.uptime(),
+                    };
+                    return JSON.stringify(info);
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['execute_command'] = defineChatSessionFunction({
+            description: 'Execute shell commands or AppleScript (on macOS). Use shell commands for general operations or AppleScript for macOS-specific automation.',
+            params: {
+                type: 'object',
+                properties: {
+                    command: {
+                        type: 'string',
+                        description: 'The command to execute',
+                    },
+                    type: {
+                        type: 'string',
+                        description: 'Command type: "shell" (default) or "applescript" (macOS only)',
+                    }
+                }
+            },
+            handler(params) {
+                console.log('execute_command', params);
+                try {
+                    const cmdType = params.type || 'shell';
+                    let result;
+                    let statusCode = 0;
+                    if (cmdType === 'applescript' && platform() === 'darwin') {
+                        try {
+                            result = execSync(`osascript -e '${params.command.replace(/'/g, "'\\''")}'`, { encoding: 'utf8' });
+                        }
+                        catch (e) {
+                            result = e.message;
+                            statusCode = e.status || 1;
+                        }
+                    }
+                    else {
+                        try {
+                            result = execSync(params.command, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+                        }
+                        catch (e) {
+                            result = e.message;
+                            statusCode = e.status || 1;
+                        }
+                    }
+                    return JSON.stringify({ output: result, statusCode, command: params.command });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['click_at_position'] = defineChatSessionFunction({
+            description: 'Click the mouse at specific screen coordinates',
+            params: {
+                type: 'object',
+                properties: {
+                    x: {
+                        type: 'number',
+                        description: 'X coordinate',
+                    },
+                    y: {
+                        type: 'number',
+                        description: 'Y coordinate',
+                    },
+                    button: {
+                        type: 'string',
+                        description: 'Mouse button: "left" (default), "right", or "middle"',
+                    },
+                    double: {
+                        type: 'boolean',
+                        description: 'Whether to double click',
+                    }
+                }
+            },
+            handler: async (params) => {
+                console.log('click_at_position', params);
+                try {
+                    robot.moveMouse(params.x, params.y);
+                    const button = params.button || 'left';
+                    const double = params.double || false;
+                    robot.mouseClick(button, double);
+                    return JSON.stringify({
+                        action: 'click',
+                        x: params.x,
+                        y: params.y,
+                        button,
+                        double
+                    });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['type_text'] = defineChatSessionFunction({
+            description: 'Type text at the current cursor position',
+            params: {
+                type: 'object',
+                properties: {
+                    text: {
+                        type: 'string',
+                        description: 'The text to type',
+                    }
+                }
+            },
+            handler: async (params) => {
+                console.log('type_text', params);
+                try {
+                    robot.typeString(params.text);
+                    return JSON.stringify({
+                        action: 'type',
+                        text: params.text
+                    });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['take_screenshot'] = defineChatSessionFunction({
+            description: 'Take a screenshot of the entire screen or active display. Returns base64 encoded image data.',
+            handler: async () => {
+                console.log('take_screenshot');
+                try {
+                    const imgBuffer = await screenshotDesktop();
+                    const base64 = imgBuffer.toString('base64');
+                    return JSON.stringify({
+                        action: 'screenshot',
+                        format: 'png',
+                        encoding: 'base64',
+                        data: base64,
+                        size: imgBuffer.length,
+                    });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        functionsObj['press_keys'] = defineChatSessionFunction({
+            description: 'Press keyboard shortcuts/key combinations. Use + to combine keys (e.g., "command+c", "control+shift+t")',
+            params: {
+                type: 'object',
+                properties: {
+                    shortcut: {
+                        type: 'string',
+                        description: 'Key combination separated by + (e.g., "command+c", "control+alt+delete")',
+                    }
+                }
+            },
+            handler: async (params) => {
+                console.log('press_keys', params);
+                try {
+                    const keys = params.shortcut.toLowerCase().split('+').map(k => k.trim());
+                    // Handle modifiers and regular keys
+                    const modifiers = [];
+                    let regularKey;
+                    for (const key of keys) {
+                        if (['command', 'cmd', 'control', 'ctrl', 'shift', 'alt', 'option'].includes(key)) {
+                            modifiers.push(key === 'cmd' ? 'command' : key === 'ctrl' ? 'control' : key === 'option' ? 'alt' : key);
+                        }
+                        else {
+                            regularKey = key;
+                        }
+                    }
+                    if (regularKey && modifiers.length > 0) {
+                        robot.keyTap(regularKey, modifiers);
+                    }
+                    else if (regularKey) {
+                        robot.keyTap(regularKey);
+                    }
+                    else if (modifiers.length > 0) {
+                        // Just press the modifier
+                        robot.keyTap(modifiers[0]);
+                    }
+                    return JSON.stringify({
+                        action: 'press_keys',
+                        shortcut: params.shortcut
+                    });
+                }
+                catch (error) {
+                    return JSON.stringify({ error: error.message });
+                }
+            },
+        });
+        // Add user-provided functions
         Array.from(functions?.entries()).map(([name, func]) => {
-            if (!functionsObj) {
+            if (func.type !== 'function') {
                 return;
             }
             if (func.params) {
