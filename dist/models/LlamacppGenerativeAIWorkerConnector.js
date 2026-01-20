@@ -93,6 +93,7 @@ export class LlamacppGenerativeAIWorkerConnector {
                 downloaded: model.model.downloaded ?? false,
                 totalSize: model.model.totalSize ?? undefined,
                 downloadedSize: model.model.downloadedSize ?? undefined,
+                loadingProgress: model.model.loadingProgress ?? undefined,
                 workflows: new Set(),
             });
         }
@@ -143,6 +144,10 @@ export class LlamacppGenerativeAIWorkerConnector {
                 },
                 modelPath: modelObj.pathName,
                 defaultContextFlashAttention: true,
+                onLoadProgress: (progress) => {
+                    modelObj.loadingProgress = progress;
+                    LlamacppGenerativeAIWorkerConnector.setModel(id, modelObj);
+                },
             });
             modelObj.model = model;
             console.log('Model loaded', model.gpuLayers);

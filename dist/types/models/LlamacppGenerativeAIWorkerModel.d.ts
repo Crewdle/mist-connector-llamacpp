@@ -17,6 +17,10 @@ export interface ILlamacppGenerativeAIWorkerModel {
      */
     model?: LlamaModel;
     /**
+     * The loading progress of the model.
+     */
+    loadingProgress?: number;
+    /**
      * The downloaded flag.
      */
     downloaded: boolean;
