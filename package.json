@@ -24,14 +24,13 @@
     "dist/"
   ],
   "dependencies": {
-    "follow-redirects": "^1.15.9",
-    "node-llama-cpp": "^3.5.0"
+    "node-llama-cpp": "^3.14.2",
+    "officeparser": "^4.1.1"
   },
   "devDependencies": {
-    "@crewdle/web-sdk-types": "^1.0.36",
-    "@types/async-retry": "^1.4.8",
-    "@types/follow-redirects": "^1.14.4",
-    "@types/node": "^20.14.9",
-    "typescript": "^5.5.2"
+    "@crewdle/web-sdk-types": "^1.0.54",
+    "@types/async-retry": "^1.4.9",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3"
   }
 }

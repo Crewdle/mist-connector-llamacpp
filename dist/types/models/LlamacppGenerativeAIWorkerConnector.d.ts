@@ -1,5 +1,6 @@
 import type { GenerativeAIEngineType, IGenerativeAIModel, IGenerativeAIWorkerConnector, IGenerativeAIWorkerOptions, GenerativeAIWorkerConnectorParameters, GenerativeAIWorkerConnectorResult, IGenerativeAIPromptWorkerConnectorParameters, IGenerativeAIWorkerConnectorPromptResult } from '@crewdle/web-sdk-types';
 import { ILlamacppGenerativeAIWorkerOptions } from './LlamacppGenerativeAIWorkerOptions';
+import { ILlamacppGenerativeAIWorkerModel } from './LlamacppGenerativeAIWorkerModel';
 /**
  * The Llamacpp machine learning connector.
  */
@@ -42,6 +43,21 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      */
     private static embeddingContext?;
     /**
+     * Microsoft Graph OAuth tokens.
+     * @ignore
+     */
+    private static microsoftGraphTokens?;
+    /**
+     * Callback to refresh Microsoft Graph access tokens.
+     * @ignore
+     */
+    private static refreshTokensCallback?;
+    /**
+     * Callback to search the web.
+     * @ignore
+     */
+    private static browserCallback?;
+    /**
      * The base folder.
      * @ignore
      */
@@ -51,6 +67,9 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
      * @param options The options.
      */
     constructor(apiKey?: string | undefined, options?: ILlamacppGenerativeAIWorkerOptions | undefined);
+    static getModels(): Map<string, ILlamacppGenerativeAIWorkerModel>;
+    static downloadModel(id: string, baseFolder: string): Promise<void>;
+    static loadModel(id: string): Promise<void>;
     /**
      * Get the VRAM state.
      * @returns The total and available VRAM.
@@ -59,6 +78,45 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
         total: number;
         available: number;
     }>;
+    /**
+     * Set the Microsoft Graph OAuth tokens.
+     * @param tokens The OAuth tokens for Microsoft Graph.
+     */
+    static setMicrosoftGraphTokens(tokens: {
+        accessToken: string;
+        refreshToken?: string;
+        tokenType?: string;
+        expiresAt?: number;
+        scope?: string;
+    } | undefined): void;
+    /**
+     * Set the callback to refresh Microsoft Graph access tokens.
+     * @param callback The callback function to refresh access tokens.
+     */
+    static setRefreshTokensCallback(callback: (refreshToken: string) => Promise<{
+        accessToken: string;
+        refreshToken?: string;
+        tokenType?: string;
+        expiresAt?: number;
+        scope?: string;
+    }>): void;
+    /**
+     * Set the callback to browse the web.
+     * @param callback The callback function to browse the web.
+     */
+    static setBrowserCallback(callback: (query: string) => Promise<string>): void;
+    /**
+     * Get the Microsoft Graph OAuth tokens.
+     * Automatically refreshes tokens if they are expired or about to expire (within 5 minutes).
+     * @returns A promise that resolves with the OAuth tokens if set, undefined otherwise.
+     */
+    private static getMicrosoftGraphTokens;
+    /**
+     * Refresh the Microsoft Graph access tokens.
+     * @returns A promise that resolves with the refreshed access tokens.
+     * @throws Error if no refresh callback is set or no refresh token is available.
+     */
+    private static refreshAccessTokens;
     /**
      * Get the Llama engine.
      * @returns A promise that resolves with the Llama engine.
@@ -149,7 +207,10 @@ export declare class LlamacppGenerativeAIWorkerConnector implements IGenerativeA
     /**
      * Get the functions object.
      * @param functions The functions to process
+     * @param modelId The model ID to get context size from
      * @returns A promise that resolves to the functions object
      */
     private getFunctions;
+    private markdownSearch;
+    private markdownContent;
 }

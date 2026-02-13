@@ -17,6 +17,22 @@ export interface ILlamacppGenerativeAIWorkerModel {
      */
     model?: LlamaModel;
     /**
+     * The loading progress of the model.
+     */
+    loadingProgress?: number;
+    /**
+     * The downloaded flag.
+     */
+    downloaded: boolean;
+    /**
+     * The total size of the model.
+     */
+    totalSize?: number;
+    /**
+     * The downloaded size of the model.
+     */
+    downloadedSize?: number;
+    /**
      * The workflows that use the model.
      */
     workflows: Set<string>;

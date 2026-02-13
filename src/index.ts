@@ -2,6 +2,7 @@ import { GenerativeAIWorkerConnectorConstructor } from '@crewdle/web-sdk-types';
 
 import { LlamacppGenerativeAIWorkerConnector } from './models/LlamacppGenerativeAIWorkerConnector.js';
 import { ILlamacppGenerativeAIWorkerOptions } from './models/LlamacppGenerativeAIWorkerOptions';
+import { ILlamacppGenerativeAIWorkerModel } from './models/LlamacppGenerativeAIWorkerModel.js';
 
 export function getLlamacppGenerativeAIWorkerConnector(options?: ILlamacppGenerativeAIWorkerOptions): GenerativeAIWorkerConnectorConstructor {
   if (!options) {
@@ -17,3 +18,4 @@ export function getLlamacppGenerativeAIWorkerConnector(options?: ILlamacppGenera
 
 export { ILlamacppGenerativeAIWorkerOptions };
 export { LlamacppGenerativeAIWorkerConnector };
+export { ILlamacppGenerativeAIWorkerModel };
